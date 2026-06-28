@@ -103,6 +103,7 @@
     width: 100%;
     overflow-y: auto;
     background: #161616;
+    transition: opacity 0.18s ease;
   }
   #usersPanel.hidden { display: none; }
   .userItem {
@@ -125,8 +126,13 @@
     width: 100%;
     display: none;
     flex-direction: column;
+    animation: panelIn 0.2s ease-out;
   }
   #chatPanel.active { display: flex; }
+  @keyframes panelIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
   #chatHeader {
     padding: 10px 14px;
     background: #1c1c1c;
@@ -155,6 +161,11 @@
     border-radius: 12px;
     font-size: 15px;
     word-wrap: break-word;
+    animation: msgIn 0.22s ease-out;
+  }
+  @keyframes msgIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
   }
   .msg.mine {
     align-self: flex-end;
@@ -243,6 +254,7 @@ const WS_BASE = "wss://tunduk-messenger.onrender.com";
 
 let token = localStorage.getItem("tunduk_token") || null;
 let myUsername = localStorage.getItem("tunduk_username") || null;
+let myUserId = null;
 let ws = null;
 let currentChatWith = null;
 let allUsers = [];
@@ -266,8 +278,22 @@ function showApp() {
   $("auth").style.display = "none";
   $("app").style.display = "flex";
   $("meLabel").textContent = myUsername;
+  loadMyId();
   loadUsers();
   connectWebSocket();
+}
+
+async function loadMyId() {
+  try {
+    const res = await fetch(`${API_BASE}/me`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (res.status === 401) { logout(); return; }
+    const me = await res.json();
+    myUserId = me.id;
+  } catch (e) {
+    console.error("Не удалось получить свой ID", e);
+  }
 }
 
 // ---------- AUTH ----------
@@ -401,11 +427,9 @@ async function loadHistory(username) {
     if (res.status === 401) { logout(); return; }
     const history = await res.json();
     messageCache[username] = history.map(m => ({
-      sender: m.sender_id === undefined ? null : null, // заполним ниже через id->username нельзя, используем поля напрямую
       content: m.content,
       timestamp: m.timestamp,
-      // backend отдаёт sender_id/receiver_id, а не имена — определим "моё" сообщение или нет иначе
-      raw: m
+      mine: myUserId !== null && m.sender_id === myUserId
     }));
     renderMessages(username);
   } catch (e) {
