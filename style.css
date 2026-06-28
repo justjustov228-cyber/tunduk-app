@@ -1,0 +1,235 @@
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: -apple-system, Roboto, Arial, sans-serif;
+  background: #111;
+  color: #eee;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+#status {
+  padding: 6px 10px;
+  font-size: 12px;
+  text-align: center;
+  background: #222;
+  color: #999;
+}
+#status.online { color: #4caf50; }
+#status.offline { color: #f44336; }
+
+/* --- Auth screen --- */
+#auth {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  gap: 10px;
+}
+#auth input {
+  width: 100%;
+  max-width: 300px;
+  padding: 12px;
+  margin: 4px 0;
+  border-radius: 8px;
+  border: 1px solid #444;
+  background: #1c1c1c;
+  color: #eee;
+  font-size: 16px;
+}
+#auth button {
+  width: 100%;
+  max-width: 300px;
+  padding: 12px;
+  margin-top: 8px;
+  border-radius: 8px;
+  border: none;
+  background: #2196f3;
+  color: white;
+  font-size: 16px;
+  cursor: pointer;
+}
+#auth button.secondary {
+  background: #333;
+}
+#authError {
+  color: #f44336;
+  font-size: 13px;
+  min-height: 18px;
+}
+h1 { font-size: 22px; margin-bottom: 0; }
+.subtitle { color: #888; font-size: 13px; margin-top: 0; margin-bottom: 16px; }
+
+/* --- Main app --- */
+#app {
+  display: none;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+}
+#topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  background: #1c1c1c;
+  border-bottom: 1px solid #333;
+}
+#topbar .me { font-weight: bold; }
+#topbar button {
+  background: none;
+  border: none;
+  color: #f44336;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+#body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+/* Users list */
+#usersPanel {
+  width: 100%;
+  overflow-y: auto;
+  background: #161616;
+  transition: opacity 0.18s ease;
+}
+#usersPanel.hidden { display: none; }
+.userItem {
+  padding: 14px;
+  border-bottom: 1px solid #262626;
+  cursor: pointer;
+}
+.userItem:active { background: #222; }
+#refreshUsers {
+  width: 100%;
+  padding: 10px;
+  background: #1c1c1c;
+  color: #2196f3;
+  border: none;
+  border-bottom: 1px solid #333;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+/* Chat panel */
+#chatPanel {
+  width: 100%;
+  display: none;
+  flex-direction: column;
+  animation: panelIn 0.2s ease-out;
+}
+#chatPanel.active { display: flex; }
+@keyframes panelIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+#chatHeader {
+  padding: 10px 14px;
+  background: #1c1c1c;
+  border-bottom: 1px solid #333;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+#chatHeader button {
+  background: none;
+  border: none;
+  color: #2196f3;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  padding: 4px;
+}
+#messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.msg {
+  max-width: 75%;
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 15px;
+  word-wrap: break-word;
+  animation: msgIn 0.22s ease-out;
+}
+@keyframes msgIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.msg.mine {
+  align-self: flex-end;
+  background: #2196f3;
+  color: white;
+}
+.msg.theirs {
+  align-self: flex-start;
+  background: #2a2a2a;
+}
+.msg .meta {
+  font-size: 10px;
+  opacity: 0.6;
+  margin-top: 3px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  justify-content: flex-end;
+}
+.tick {
+  display: inline-flex;
+  opacity: 0.7;
+}
+.tick.delivered svg {
+  color: #8ec9ff;
+}
+.tick svg {
+  width: 14px;
+  height: 14px;
+}
+#inputBar {
+  display: flex;
+  padding: 8px;
+  background: #1c1c1c;
+  border-top: 1px solid #333;
+  gap: 8px;
+}
+#inputBar input {
+  flex: 1;
+  padding: 10px;
+  border-radius: 20px;
+  border: 1px solid #444;
+  background: #222;
+  color: #eee;
+  font-size: 15px;
+}
+#inputBar button {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: #2196f3;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+#inputBar button svg {
+  width: 18px;
+  height: 18px;
+}
