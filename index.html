@@ -24,7 +24,10 @@
   <!-- MAIN APP -->
   <div id="app">
     <div id="topbar">
-      <span class="me" id="meLabel"></span>
+      <div class="meBlock" id="meBlock">
+        <div class="avatar small" id="myAvatarSmall"></div>
+        <span class="me" id="meLabel"></span>
+      </div>
       <button id="logoutBtn"></button>
     </div>
     <div id="body">
@@ -35,12 +38,35 @@
       <div id="chatPanel">
         <div id="chatHeader">
           <button id="backBtn"></button>
+          <div class="avatar small" id="chatAvatarSmall"></div>
           <strong id="chatWithLabel"></strong>
         </div>
         <div id="messages"></div>
         <div id="inputBar">
           <input id="msgInput" type="text" placeholder="Сообщение...">
           <button id="sendBtn"></button>
+        </div>
+      </div>
+      <div id="profileScreen">
+        <div id="profileHeader">
+          <button id="profileBackBtn"></button>
+          <strong>Профиль</strong>
+        </div>
+        <div id="profileBody">
+          <div class="avatarWrap">
+            <div class="avatar" id="profileAvatarBig"></div>
+            <div class="avatarEditBtn" id="avatarEditBtn"></div>
+            <input type="file" id="avatarFileInput" accept="image/*" style="display:none;">
+          </div>
+
+          <label>Имя пользователя</label>
+          <input id="profileUsernameInput" type="text" maxlength="32">
+
+          <label>О себе</label>
+          <textarea id="profileBioInput" maxlength="200" placeholder="Расскажи немного о себе..."></textarea>
+
+          <button id="saveProfileBtn">Сохранить</button>
+          <div id="profileMsg"></div>
         </div>
       </div>
     </div>
