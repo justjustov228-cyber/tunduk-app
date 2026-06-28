@@ -181,6 +181,13 @@
     opacity: 0.6;
     margin-top: 3px;
   }
+  .tick {
+    opacity: 0.7;
+  }
+  .tick.delivered {
+    color: #8ec9ff;
+    opacity: 1;
+  }
   #inputBar {
     display: flex;
     padding: 8px;
@@ -429,7 +436,8 @@ async function loadHistory(username) {
     messageCache[username] = history.map(m => ({
       content: m.content,
       timestamp: m.timestamp,
-      mine: myUserId !== null && m.sender_id === myUserId
+      mine: myUserId !== null && m.sender_id === myUserId,
+      delivered: m.delivered
     }));
     renderMessages(username);
   } catch (e) {
@@ -441,16 +449,20 @@ function renderMessages(username) {
   const container = $("messages");
   container.innerHTML = "";
   const msgs = messageCache[username] || [];
-  msgs.forEach(m => addMessageBubble(m.content, m.mine, m.timestamp));
+  msgs.forEach(m => addMessageBubble(m.content, m.mine, m.timestamp, m.delivered));
   container.scrollTop = container.scrollHeight;
 }
 
-function addMessageBubble(content, mine, timestamp) {
+function addMessageBubble(content, mine, timestamp, delivered) {
   const container = $("messages");
   const div = document.createElement("div");
   div.className = "msg " + (mine ? "mine" : "theirs");
   const time = timestamp ? new Date(timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "";
-  div.innerHTML = `${escapeHtml(content)}<div class="meta">${time}</div>`;
+  let tick = "";
+  if (mine) {
+    tick = delivered ? ` <span class="tick delivered">✓✓</span>` : ` <span class="tick">✓</span>`;
+  }
+  div.innerHTML = `${escapeHtml(content)}<div class="meta">${time}${tick}</div>`;
   container.appendChild(div);
   container.scrollTop = container.scrollHeight;
 }
@@ -459,6 +471,30 @@ function escapeHtml(str) {
   const d = document.createElement("div");
   d.textContent = str;
   return d.innerHTML;
+}
+
+// ---------- ЗВУК УВЕДОМЛЕНИЯ ----------
+
+let audioCtx = null;
+
+function playIncomingSound() {
+  try {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.frequency.value = 880;
+    osc.type = "sine";
+    gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.25);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.25);
+  } catch (e) {
+    // Браузер может блокировать звук до первого взаимодействия пользователя — это не критично
+  }
 }
 
 // ---------- WEBSOCKET ----------
@@ -494,6 +530,7 @@ function connectWebSocket() {
       if (currentChatWith === other) {
         addMessageBubble(data.content, false, data.timestamp);
       }
+      playIncomingSound();
       // Обновим список пользователей на случай нового собеседника
       if (!allUsers.find(u => u.username === other)) {
         loadUsers();
@@ -504,9 +541,9 @@ function connectWebSocket() {
       // Подтверждение, что моё сообщение дошло до сервера (и доставлено получателю, если онлайн)
       const other = data.receiver;
       if (!messageCache[other]) messageCache[other] = [];
-      messageCache[other].push({ content: data.content, mine: true, timestamp: data.timestamp });
+      messageCache[other].push({ content: data.content, mine: true, timestamp: data.timestamp, delivered: data.delivered });
       if (currentChatWith === other) {
-        addMessageBubble(data.content, true, data.timestamp);
+        addMessageBubble(data.content, true, data.timestamp, data.delivered);
       }
     }
   };
