@@ -16,6 +16,19 @@ let messageCache = {};
 // Кэш профилей пользователей: { "alice": {username, bio, avatar} }
 let userProfileCache = {};
 
+// Настройки: звук и обои (читаем сразу, чтобы были доступны везде ниже)
+let soundEnabled = localStorage.getItem("tunduk_sound") !== "off";
+let currentWallpaper = localStorage.getItem("tunduk_wallpaper") || "none";
+
+const WALLPAPERS = [
+  { id: "none",   css: "#121317" },
+  { id: "dusk",   css: "linear-gradient(160deg, #1c2030 0%, #15171c 100%)" },
+  { id: "ember",  css: "linear-gradient(160deg, #2a1f14 0%, #15171c 100%)" },
+  { id: "forest", css: "linear-gradient(160deg, #182218 0%, #15171c 100%)" },
+  { id: "dots",   css: "radial-gradient(circle, #2c2f37 1px, #121317 1px)", size: "16px 16px" },
+  { id: "grid",   css: "linear-gradient(#1d2027 1px, transparent 1px), linear-gradient(90deg, #1d2027 1px, transparent 1px)", size: "20px 20px", base: "#121317" },
+];
+
 const $ = (id) => document.getElementById(id);
 
 // ---------- SVG-ИКОНКИ ----------
@@ -29,15 +42,18 @@ const ICONS = {
   tickOne: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>`,
   tickTwo: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><polyline points="18 6 7 17 2 12"/><polyline points="22 6 11 17 9 15"/></svg>`,
   camera: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>`,
+  settings: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
 };
 
 function injectIcons() {
   $("refreshUsers").innerHTML = `${ICONS.refresh} Обновить список`;
   $("backBtn").innerHTML = ICONS.back;
   $("sendBtn").innerHTML = ICONS.send;
-  $("logoutBtn").innerHTML = `${ICONS.logout} Выйти`;
+  $("logoutBtn").innerHTML = ICONS.logout;
   $("profileBackBtn").innerHTML = ICONS.back;
   $("avatarEditBtn").innerHTML = ICONS.camera;
+  $("settingsBtn").innerHTML = ICONS.settings;
+  $("settingsBackBtn").innerHTML = ICONS.back;
 }
 
 function setStatus(text, online) {
@@ -449,6 +465,7 @@ function escapeHtml(str) {
 let audioCtx = null;
 
 function playIncomingSound() {
+  if (!soundEnabled) return;
   try {
     if (!audioCtx) {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -532,9 +549,74 @@ function sendMessage() {
   input.value = "";
 }
 
+// ---------- НАСТРОЙКИ: ЗВУК И ОБОИ ----------
+
+function openSettings() {
+  $("settingsScreen").classList.add("active");
+  $("usersPanel").classList.add("hidden");
+  $("chatPanel").classList.remove("active");
+  renderSoundToggle();
+  renderWallpaperGrid();
+}
+
+function closeSettings() {
+  $("settingsScreen").classList.remove("active");
+  $("usersPanel").classList.remove("hidden");
+}
+
+function renderSoundToggle() {
+  const toggle = $("soundToggle");
+  toggle.classList.toggle("on", soundEnabled);
+}
+
+function toggleSound() {
+  soundEnabled = !soundEnabled;
+  localStorage.setItem("tunduk_sound", soundEnabled ? "on" : "off");
+  renderSoundToggle();
+}
+
+function renderWallpaperGrid() {
+  const grid = $("wallpaperGrid");
+  grid.innerHTML = "";
+  WALLPAPERS.forEach(wp => {
+    const div = document.createElement("div");
+    div.className = "wallpaperSwatch" + (wp.id === currentWallpaper ? " active" : "");
+    div.style.background = wp.base || "#121317";
+    if (wp.size) {
+      div.style.backgroundImage = wp.css;
+      div.style.backgroundSize = wp.size;
+    } else {
+      div.style.background = wp.css;
+    }
+    div.onclick = () => selectWallpaper(wp.id);
+    grid.appendChild(div);
+  });
+}
+
+function selectWallpaper(id) {
+  currentWallpaper = id;
+  localStorage.setItem("tunduk_wallpaper", id);
+  renderWallpaperGrid();
+  applyWallpaper();
+}
+
+function applyWallpaper() {
+  const wp = WALLPAPERS.find(w => w.id === currentWallpaper) || WALLPAPERS[0];
+  const messagesEl = $("messages");
+  if (wp.size) {
+    messagesEl.style.backgroundColor = wp.base || "#121317";
+    messagesEl.style.backgroundImage = wp.css;
+    messagesEl.style.backgroundSize = wp.size;
+  } else {
+    messagesEl.style.backgroundImage = wp.css.startsWith("linear") || wp.css.startsWith("radial") ? wp.css : "none";
+    messagesEl.style.backgroundColor = wp.css.startsWith("#") ? wp.css : "#121317";
+  }
+}
+
 // ---------- EVENTS ----------
 
 injectIcons();
+applyWallpaper();
 
 $("loginBtn").onclick = login;
 $("registerBtn").onclick = register;
@@ -552,10 +634,14 @@ $("saveProfileBtn").onclick = saveProfile;
 $("avatarEditBtn").onclick = pickAvatarFile;
 $("avatarFileInput").addEventListener("change", onAvatarFileChosen);
 
+$("settingsBtn").onclick = openSettings;
+$("settingsBackBtn").onclick = closeSettings;
+$("soundToggleRow").onclick = toggleSound;
+
 // ---------- INIT ----------
 
 if (token && myUsername) {
   showApp();
 } else {
   showAuth();
-                            }
+                        }
