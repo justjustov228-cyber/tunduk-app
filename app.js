@@ -43,10 +43,10 @@ const ICONS = {
   tickTwo: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><polyline points="18 6 7 17 2 12"/><polyline points="22 6 11 17 9 15"/></svg>`,
   camera: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>`,
   settings: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
+  search: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`,
 };
 
 function injectIcons() {
-  $("refreshUsers").innerHTML = `${ICONS.refresh} Обновить список`;
   $("backBtn").innerHTML = ICONS.back;
   $("sendBtn").innerHTML = ICONS.send;
   $("logoutBtn").innerHTML = ICONS.logout;
@@ -54,6 +54,8 @@ function injectIcons() {
   $("avatarEditBtn").innerHTML = ICONS.camera;
   $("settingsBtn").innerHTML = ICONS.settings;
   $("settingsBackBtn").innerHTML = ICONS.back;
+  $("searchBtn").innerHTML = ICONS.search;
+  $("searchBackBtn").innerHTML = ICONS.back;
 }
 
 function setStatus(text, online) {
@@ -72,7 +74,7 @@ function showApp() {
   $("app").style.display = "flex";
   $("meLabel").textContent = myUsername;
   loadMyId();
-  loadUsers();
+  renderRecentChats();
   connectWebSocket();
 }
 
@@ -339,54 +341,113 @@ async function fetchUserProfile(username) {
   }
 }
 
-// ---------- USERS LIST ----------
+// ---------- ПОИСК ПО USERNAME ----------
 
-async function loadUsers() {
+function recentChatsKey() {
+  return `tunduk_recent_${myUsername}`;
+}
+
+function getRecentChats() {
   try {
-    const res = await fetch(`${API_BASE}/users`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    if (res.status === 401) { logout(); return; }
-    allUsers = await res.json();
-    allUsers.forEach(u => { userProfileCache[u.username] = u; });
-    renderUsers();
-  } catch (e) {
-    console.error("Не удалось загрузить пользователей", e);
+    const raw = localStorage.getItem(recentChatsKey());
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
   }
 }
 
-function renderUsers() {
-  const list = $("usersList");
-  list.innerHTML = "";
-  if (allUsers.length === 0) {
-    list.innerHTML = `<div style="padding:14px;color:#888;">Пока нет других пользователей</div>`;
+function addRecentChat(username) {
+  let list = getRecentChats().filter(u => u !== username);
+  list.unshift(username);
+  list = list.slice(0, 50);
+  localStorage.setItem(recentChatsKey(), JSON.stringify(list));
+}
+
+async function renderRecentChats() {
+  const list = $("recentChatsList");
+  const empty = $("emptyState");
+  const recent = getRecentChats();
+
+  if (recent.length === 0) {
+    list.innerHTML = "";
+    empty.style.display = "flex";
     return;
   }
-  allUsers.forEach(u => {
-    const div = document.createElement("div");
-    div.className = "userItem";
+  empty.style.display = "none";
 
-    const avatarDiv = document.createElement("div");
-    avatarDiv.className = "avatar small";
-    renderAvatarInto(avatarDiv, u.username, u.avatar);
-
-    const textDiv = document.createElement("div");
-    textDiv.className = "userItemText";
-    const nameSpan = document.createElement("span");
-    nameSpan.textContent = u.username;
-    textDiv.appendChild(nameSpan);
-    if (u.bio) {
-      const bioSpan = document.createElement("span");
-      bioSpan.className = "userItemBio";
-      bioSpan.textContent = u.bio;
-      textDiv.appendChild(bioSpan);
+  list.innerHTML = "";
+  for (const username of recent) {
+    let profile = userProfileCache[username];
+    if (!profile) {
+      profile = await fetchUserProfile(username);
     }
-
-    div.appendChild(avatarDiv);
-    div.appendChild(textDiv);
-    div.onclick = () => openChat(u.username);
+    if (!profile) continue;
+    const div = buildUserItem(profile);
     list.appendChild(div);
-  });
+  }
+}
+
+function buildUserItem(u) {
+  const div = document.createElement("div");
+  div.className = "userItem";
+
+  const avatarDiv = document.createElement("div");
+  avatarDiv.className = "avatar small";
+  renderAvatarInto(avatarDiv, u.username, u.avatar);
+
+  const textDiv = document.createElement("div");
+  textDiv.className = "userItemText";
+  const nameSpan = document.createElement("span");
+  nameSpan.textContent = u.username;
+  textDiv.appendChild(nameSpan);
+  if (u.bio) {
+    const bioSpan = document.createElement("span");
+    bioSpan.className = "userItemBio";
+    bioSpan.textContent = u.bio;
+    textDiv.appendChild(bioSpan);
+  }
+
+  div.appendChild(avatarDiv);
+  div.appendChild(textDiv);
+  div.onclick = () => { closeSearch(); openChat(u.username); };
+  return div;
+}
+
+function openSearch() {
+  $("searchPanel").classList.add("active");
+  $("searchInput").value = "";
+  $("searchResult").innerHTML = `<div class="searchHint">Введи точное имя пользователя</div>`;
+  setTimeout(() => $("searchInput").focus(), 100);
+}
+
+function closeSearch() {
+  $("searchPanel").classList.remove("active");
+}
+
+let searchDebounce = null;
+async function onSearchInput() {
+  const query = $("searchInput").value.trim();
+  clearTimeout(searchDebounce);
+
+  if (!query) {
+    $("searchResult").innerHTML = `<div class="searchHint">Введи точное имя пользователя</div>`;
+    return;
+  }
+
+  searchDebounce = setTimeout(async () => {
+    if (query === myUsername) {
+      $("searchResult").innerHTML = `<div class="searchHint">Это твой аккаунт</div>`;
+      return;
+    }
+    const profile = await fetchUserProfile(query);
+    const resultDiv = $("searchResult");
+    resultDiv.innerHTML = "";
+    if (!profile) {
+      resultDiv.innerHTML = `<div class="searchHint">Пользователь не найден</div>`;
+      return;
+    }
+    resultDiv.appendChild(buildUserItem(profile));
+  }, 350);
 }
 
 // ---------- CHAT NAVIGATION ----------
@@ -401,6 +462,7 @@ async function openChat(username) {
   const profile = await fetchUserProfile(username);
   renderAvatarInto($("chatAvatarSmall"), username, profile ? profile.avatar : "");
 
+  addRecentChat(username);
   await loadHistory(username);
 }
 
@@ -408,6 +470,7 @@ function closeChat() {
   currentChatWith = null;
   $("chatPanel").classList.remove("active");
   $("usersPanel").classList.remove("hidden");
+  renderRecentChats();
 }
 
 async function loadHistory(username) {
@@ -519,10 +582,8 @@ function connectWebSocket() {
         addMessageBubble(data.content, false, data.timestamp);
       }
       playIncomingSound();
-      // Обновим список пользователей на случай нового собеседника
-      if (!allUsers.find(u => u.username === other)) {
-        loadUsers();
-      }
+      addRecentChat(other);
+      if (!currentChatWith) renderRecentChats();
     }
 
     if (data.type === "ack") {
@@ -621,12 +682,15 @@ applyWallpaper();
 $("loginBtn").onclick = login;
 $("registerBtn").onclick = register;
 $("logoutBtn").onclick = logout;
-$("refreshUsers").onclick = loadUsers;
 $("backBtn").onclick = closeChat;
 $("sendBtn").onclick = sendMessage;
 $("msgInput").addEventListener("keypress", (e) => {
   if (e.key === "Enter") sendMessage();
 });
+
+$("searchBtn").onclick = openSearch;
+$("searchBackBtn").onclick = closeSearch;
+$("searchInput").addEventListener("input", onSearchInput);
 
 $("meBlock").onclick = openMyProfile;
 $("profileBackBtn").onclick = closeProfile;
@@ -644,4 +708,4 @@ if (token && myUsername) {
   showApp();
 } else {
   showAuth();
-                        }
+}
