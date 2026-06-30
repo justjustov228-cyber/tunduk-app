@@ -47,6 +47,7 @@
         <span class="me" id="meLabel"></span>
       </div>
       <div class="topbarActions">
+        <button id="searchBtn"></button>
         <button id="settingsBtn"></button>
         <button id="logoutBtn"></button>
       </div>
@@ -55,8 +56,20 @@
 
       <!-- Users list -->
       <div id="usersPanel">
-        <button id="refreshUsers"></button>
-        <div id="usersList"></div>
+        <div id="recentChatsList"></div>
+        <div id="emptyState" class="emptyState">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <p>Найди человека по точному имени пользователя, чтобы начать переписку</p>
+        </div>
+      </div>
+
+      <!-- Search overlay -->
+      <div id="searchPanel">
+        <div class="screenHeader">
+          <button id="searchBackBtn"></button>
+          <input id="searchInput" type="text" placeholder="Имя пользователя" autocomplete="off">
+        </div>
+        <div id="searchResult"></div>
       </div>
 
       <!-- Chat -->
