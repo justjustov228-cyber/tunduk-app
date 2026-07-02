@@ -674,6 +674,12 @@ function applyWallpaper() {
   }
 }
 
+// ---------- KEEP-ALIVE ----------
+// Пингуем сервер каждые 10 минут, чтобы Render не засыпал
+setInterval(() => {
+  fetch(`${API_BASE}/health`).catch(() => {});
+}, 10 * 60 * 1000);
+
 // ---------- EVENTS ----------
 
 injectIcons();
@@ -708,4 +714,4 @@ if (token && myUsername) {
   showApp();
 } else {
   showAuth();
-}
+      }
