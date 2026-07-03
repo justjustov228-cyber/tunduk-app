@@ -1,10 +1,14 @@
 * { box-sizing: border-box; }
-body {
+html, body {
   margin: 0;
+  height: 100%;
+}
+body {
   font-family: -apple-system, 'Inter', Roboto, Arial, sans-serif;
   background: #15171c;
   color: #f0ede4;
   height: 100vh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -16,6 +20,7 @@ body {
   background: #1a1c22;
   color: #6b6f7a;
   letter-spacing: 0.02em;
+  flex-shrink: 0;
 }
 #status.online { color: #5fb86e; }
 #status.offline { color: #d9694f; }
@@ -86,7 +91,13 @@ body {
 #authError { color: #d9694f; font-size: 13px; min-height: 18px; max-width: 300px; text-align: center; }
 
 /* ============ MAIN APP ============ */
-#app { display: none; flex: 1; flex-direction: column; overflow: hidden; min-height: 0; }
+#app {
+  display: none;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
 #topbar {
   display: flex; justify-content: space-between; align-items: center;
   padding: 10px 14px; background: #1a1c22; border-bottom: 1px solid #262932; gap: 10px;
@@ -138,9 +149,13 @@ body {
 .emptyState svg { color: #3a3e48; }
 .emptyState p { font-size: 14px; line-height: 1.5; margin: 0; max-width: 240px; }
 
-/* ---- FAB ---- */
+/* ---- FAB ----
+   ВАЖНО: FAB живёт внутри #usersPanel в HTML, поэтому если usersPanel скрыт
+   (класс .hidden -> display:none), FAB тоже скрывается автоматически,
+   ПОТОМУ ЧТО он больше не position:fixed, а привязан к обычному потоку внутри панели. */
 #fab {
-  position: fixed; bottom: max(20px, env(safe-area-inset-bottom)); right: 16px;
+  position: absolute;
+  bottom: 20px; right: 16px;
   width: 52px; height: 52px; border-radius: 50%;
   background: #e8a23d; color: #1a1305;
   display: flex; align-items: center; justify-content: center;
@@ -152,9 +167,10 @@ body {
 #fab.open { transform: rotate(45deg); }
 
 #fabMenu {
-  position: fixed; bottom: calc(max(20px, env(safe-area-inset-bottom)) + 62px); right: 16px;
+  position: absolute;
+  bottom: 82px; right: 16px;
   background: #1e2128; border: 1px solid #2c2f37; border-radius: 14px;
-  overflow: hidden; z-index: 9;
+  overflow: hidden; z-index: 19;
   box-shadow: 0 8px 24px rgba(0,0,0,0.4);
   animation: fabMenuIn 0.18s ease-out;
 }
@@ -364,7 +380,6 @@ body {
   display: flex;
   flex-shrink: 0;
   padding: 9px;
-  padding-bottom: max(9px, env(safe-area-inset-bottom));
   background: #1a1c22;
   border-top: 1px solid #262932;
   gap: 8px;
