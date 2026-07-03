@@ -401,3 +401,40 @@ body {
 #inputBar.readonly { opacity: 0.4; pointer-events: none; }
 
 .hidden { display: none !important; }
+
+/* ---- Members / Admin management ---- */
+#membersScreen {
+  display: none;
+  position: absolute;
+  inset: 0;
+  flex-direction: column;
+  background: #15171c;
+  animation: panelIn 0.2s ease-out;
+  z-index: 6;
+}
+#membersScreen.active { display: flex; }
+#membersList { flex: 1; overflow-y: auto; padding: 6px 0; }
+.memberRow {
+  display: flex; align-items: center; gap: 11px;
+  padding: 12px 14px; border-bottom: 1px solid #1d2027;
+}
+.memberInfo { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.memberInfo > span:first-child { font-size: 15px; }
+.memberBadge {
+  font-size: 11px; margin-top: 2px; width: fit-content;
+  padding: 1px 7px; border-radius: 5px;
+}
+.memberBadge.owner { background: rgba(232,162,61,0.15); color: #e8a23d; }
+.memberBadge.admin { background: rgba(95,184,110,0.15); color: #5fb86e; }
+.memberAdminToggle {
+  font-size: 12px; padding: 7px 11px; border-radius: 8px;
+  border: 1px solid #2c2f37; background: #1e2128; color: #f0ede4;
+  cursor: pointer; flex-shrink: 0;
+}
+.memberAdminToggle:active { background: #262932; }
+
+#membersBtn {
+  background: none; border: none; color: #e8a23d;
+  display: flex; align-items: center; cursor: pointer; padding: 4px;
+}
+#membersBtn.hidden { display: none; }
