@@ -13,6 +13,7 @@ let currentChatWith   = null;
 let currentChatType   = "user";
 let currentChatId     = null;
 let currentChatIsAdmin = false;
+let currentChatIsOwner = false;
 let messageCache      = {};
 let userProfileCache  = {};
 
@@ -42,6 +43,8 @@ const ICONS = {
   camera:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>`,
   settings:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
   search:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`,
+  members: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
+  shield:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`,
 };
 
 function injectIcons() {
@@ -56,6 +59,8 @@ function injectIcons() {
   $("searchBackBtn").innerHTML        = ICONS.back;
   $("createChannelBackBtn").innerHTML = ICONS.back;
   $("createGroupBackBtn").innerHTML   = ICONS.back;
+  if ($("membersBtn")) $("membersBtn").innerHTML = ICONS.members;
+  if ($("membersBackBtn")) $("membersBackBtn").innerHTML = ICONS.back;
 }
 
 function setStatus(text, online) {
@@ -73,14 +78,38 @@ function showApp() {
   $("auth").style.display = "none";
   $("app").style.display  = "flex";
   $("meLabel").textContent = myUsername;
-  migrateRecentChats(); // фикс старых ключей без префикса
+  migrateRecentChats();
   loadMyId();
+  syncContactsFromServer();  // подтягиваем чаты, где я получатель, но сам не искал
   renderRecentChats();
   connectWebSocket();
 }
 
+// ---- СИНХРОНИЗАЦИЯ КОНТАКТОВ С СЕРВЕРОМ ----
+// Если кто-то мне написал, а я его не искал — чат всё равно должен появиться у меня в списке.
+async function syncContactsFromServer() {
+  try {
+    const res = await fetch(`${API_BASE}/contacts`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return;
+    const contacts = await res.json(); // список username
+    let changed = false;
+    const existing = getRecentChats();
+    const existingSet = new Set(existing);
+    const additions = [];
+    for (const username of contacts) {
+      const key = `user:${username}`;
+      if (!existingSet.has(key)) { additions.push(key); changed = true; }
+    }
+    if (changed) {
+      // Добавляем в конец (старые контакты, не поднимаем наверх без причины)
+      const merged = [...existing, ...additions];
+      localStorage.setItem(recentChatsKey(), JSON.stringify(merged));
+      renderRecentChats();
+    }
+  } catch {}
+}
+
 // ---- МИГРАЦИЯ СТАРЫХ КЛЮЧЕЙ ----
-// Старые записи были "nos", "bos" — теперь должны быть "user:nos", "user:bos"
 function migrateRecentChats() {
   const key = recentChatsKey();
   try {
@@ -90,12 +119,8 @@ function migrateRecentChats() {
     const migrated = [];
     const seen = new Set();
     for (const item of list) {
-      // Если уже в новом формате — оставляем
       const normalized = item.includes(":") ? item : `user:${item}`;
-      if (!seen.has(normalized)) {
-        seen.add(normalized);
-        migrated.push(normalized);
-      }
+      if (!seen.has(normalized)) { seen.add(normalized); migrated.push(normalized); }
     }
     localStorage.setItem(key, JSON.stringify(migrated));
   } catch {}
@@ -255,7 +280,7 @@ async function fetchUserProfile(username) {
   } catch { return null; }
 }
 
-// ---- RECENT CHATS (с дедупликацией) ----
+// ---- RECENT CHATS ----
 function recentChatsKey() { return `tunduk_recent_${myUsername}`; }
 
 function getRecentChats() {
@@ -279,10 +304,8 @@ function getRecentChats() {
 
 function addRecentChat(id, type) {
   const newKey = `${type}:${id}`;
-  // Убираем все вхождения этого же чата (и старые без префикса)
   let list = getRecentChats().filter(item => {
     if (item === newKey) return false;
-    // Убираем старый формат без префикса если это user
     if (type === "user" && item === String(id)) return false;
     return true;
   });
@@ -415,14 +438,21 @@ async function fetchMyChannels() {
 async function fetchMyGroups() {
   try { const res = await fetch(`${API_BASE}/groups/my`, { headers: { Authorization: `Bearer ${token}` } }); return res.ok ? await res.json() : []; } catch { return []; }
 }
+async function fetchChannelMembers(id) {
+  try { const res = await fetch(`${API_BASE}/channels/${id}/members`, { headers: { Authorization: `Bearer ${token}` } }); return res.ok ? await res.json() : []; } catch { return []; }
+}
+async function fetchGroupMembers(id) {
+  try { const res = await fetch(`${API_BASE}/groups/${id}/members`, { headers: { Authorization: `Bearer ${token}` } }); return res.ok ? await res.json() : []; } catch { return []; }
+}
 
 // ---- CHAT OPEN ----
 async function openUserChat(username) {
-  currentChatWith = username; currentChatType = "user"; currentChatId = null; currentChatIsAdmin = false;
+  currentChatWith = username; currentChatType = "user"; currentChatId = null; currentChatIsAdmin = false; currentChatIsOwner = false;
   $("chatWithLabel").textContent = username; $("chatSubLabel").textContent = "";
   $("usersPanel").classList.add("hidden");
   $("chatPanel").classList.add("active");
   $("inputBar").classList.remove("readonly");
+  if ($("membersBtn")) $("membersBtn").classList.add("hidden");
   const profile = await fetchUserProfile(username);
   renderAvatarInto($("chatAvatarSmall"), username, profile ? profile.avatar : "");
   addRecentChat(username, "user");
@@ -431,16 +461,22 @@ async function openUserChat(username) {
 
 async function openChannelChat(ch) {
   currentChatWith = null; currentChatType = "channel"; currentChatId = ch.id;
+  currentChatIsOwner = ch.owner_username === myUsername;
+
   const myChannels = await fetchMyChannels();
-  currentChatIsAdmin = ch.owner_username === myUsername;
-  if (!myChannels.find(c => c.id === ch.id) && ch.is_public) {
+  const already = myChannels.find(c => c.id === ch.id);
+  if (!already && ch.is_public) {
     await fetch(`${API_BASE}/channels/${ch.id}/join`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
   }
+  const fresh = await fetchChannelById(ch.id);
+  currentChatIsAdmin = fresh ? fresh.is_admin || currentChatIsOwner : currentChatIsOwner;
+
   $("chatWithLabel").textContent = ch.name;
   $("chatSubLabel").textContent  = `@${ch.handle} · канал`;
   $("usersPanel").classList.add("hidden");
   $("chatPanel").classList.add("active");
   currentChatIsAdmin ? $("inputBar").classList.remove("readonly") : $("inputBar").classList.add("readonly");
+  if ($("membersBtn")) $("membersBtn").classList.remove("hidden");
   renderAvatarInto($("chatAvatarSmall"), ch.name, ch.avatar);
   addRecentChat(ch.id, "channel");
   await loadChannelHistory(ch.id);
@@ -448,16 +484,22 @@ async function openChannelChat(ch) {
 
 async function openGroupChat(gr) {
   currentChatWith = null; currentChatType = "group"; currentChatId = gr.id;
-  currentChatIsAdmin = gr.owner_username === myUsername;
+  currentChatIsOwner = gr.owner_username === myUsername;
+
   const myGroups = await fetchMyGroups();
-  if (!myGroups.find(g => g.id === gr.id) && gr.is_public) {
+  const already = myGroups.find(g => g.id === gr.id);
+  if (!already && gr.is_public) {
     await fetch(`${API_BASE}/groups/${gr.id}/join`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
   }
+  const fresh = await fetchGroupById(gr.id);
+  currentChatIsAdmin = fresh ? fresh.is_admin || currentChatIsOwner : currentChatIsOwner;
+
   $("chatWithLabel").textContent = gr.name;
   $("chatSubLabel").textContent  = gr.handle ? `@${gr.handle} · группа` : "группа";
   $("usersPanel").classList.add("hidden");
   $("chatPanel").classList.add("active");
   $("inputBar").classList.remove("readonly");
+  if ($("membersBtn")) $("membersBtn").classList.remove("hidden");
   renderAvatarInto($("chatAvatarSmall"), gr.name, gr.avatar);
   addRecentChat(gr.id, "group");
   await loadGroupHistory(gr.id);
@@ -468,6 +510,77 @@ function closeChat() {
   $("chatPanel").classList.remove("active");
   $("usersPanel").classList.remove("hidden");
   renderRecentChats();
+}
+
+// ---- MEMBERS / ADMIN MANAGEMENT ----
+function openMembers() {
+  if (currentChatType !== "channel" && currentChatType !== "group") return;
+  $("membersScreen").classList.add("active");
+  renderMembersList();
+}
+function closeMembers() { $("membersScreen").classList.remove("active"); }
+
+async function renderMembersList() {
+  const listEl = $("membersList");
+  listEl.innerHTML = `<div style="text-align:center;color:#666;padding:20px;">Загрузка...</div>`;
+  const members = currentChatType === "channel"
+    ? await fetchChannelMembers(currentChatId)
+    : await fetchGroupMembers(currentChatId);
+
+  listEl.innerHTML = "";
+  if (members.length === 0) { listEl.innerHTML = `<div style="text-align:center;color:#666;padding:20px;">Нет участников</div>`; return; }
+
+  for (const m of members) {
+    const row = document.createElement("div");
+    row.className = "memberRow";
+
+    const av = document.createElement("div"); av.className = "avatar small";
+    renderAvatarInto(av, m.username, "");
+
+    const info = document.createElement("div"); info.className = "memberInfo";
+    const nameEl = document.createElement("span"); nameEl.textContent = m.username;
+    info.appendChild(nameEl);
+    if (m.is_owner) {
+      const badge = document.createElement("span"); badge.className = "memberBadge owner"; badge.textContent = "Владелец";
+      info.appendChild(badge);
+    } else if (m.is_admin) {
+      const badge = document.createElement("span"); badge.className = "memberBadge admin"; badge.textContent = "Админ";
+      info.appendChild(badge);
+    }
+
+    row.appendChild(av);
+    row.appendChild(info);
+
+    // Только владелец может назначать/снимать админов, и не может менять сам себя
+    if (currentChatIsOwner && !m.is_owner) {
+      const toggleBtn = document.createElement("button");
+      toggleBtn.className = "memberAdminToggle";
+      toggleBtn.textContent = m.is_admin ? "Снять админа" : "Назначить админом";
+      toggleBtn.onclick = () => toggleAdmin(m.username, !m.is_admin);
+      row.appendChild(toggleBtn);
+    }
+
+    listEl.appendChild(row);
+  }
+}
+
+async function toggleAdmin(username, makeAdmin) {
+  const url = currentChatType === "channel"
+    ? `${API_BASE}/channels/${currentChatId}/set-admin`
+    : `${API_BASE}/groups/${currentChatId}/set-admin`;
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ username, is_admin: makeAdmin }),
+    });
+    if (res.ok) {
+      renderMembersList();
+    } else {
+      const data = await res.json();
+      alert(data.detail || "Ошибка");
+    }
+  } catch { alert("Сервер не отвечает"); }
 }
 
 // ---- HISTORY ----
@@ -561,6 +674,23 @@ function playIncomingSound() {
   } catch {}
 }
 
+// ---- BROWSER NOTIFICATIONS ----
+function requestNotifyPermission() {
+  if ("Notification" in window && Notification.permission === "default") {
+    Notification.requestPermission().catch(() => {});
+  }
+}
+
+function showIncomingNotification(fromUsername, content) {
+  if (!("Notification" in window)) return;
+  if (Notification.permission !== "granted") return;
+  if (document.visibilityState === "visible" && currentChatType === "user" && currentChatWith === fromUsername) return;
+  try {
+    const n = new Notification(`${fromUsername} · Tunduk`, { body: content, tag: `tunduk-${fromUsername}` });
+    n.onclick = () => { window.focus(); closeSearch(); openUserChat(fromUsername); n.close(); };
+  } catch {}
+}
+
 // ---- WEBSOCKET ----
 function connectWebSocket() {
   if (ws) ws.close();
@@ -575,9 +705,18 @@ function connectWebSocket() {
       const other = data.sender; const key = `user:${other}`;
       if (!messageCache[key]) messageCache[key] = [];
       messageCache[key].push({ content: data.content, mine: false, timestamp: data.timestamp });
-      if (currentChatType === "user" && currentChatWith === other) addMessageBubble(data.content, false, data.timestamp);
-      playIncomingSound(); addRecentChat(other, "user");
-      if (currentChatType === "user" && !currentChatWith) renderRecentChats();
+
+      const wasNewChat = !getRecentChats().includes(key);
+      addRecentChat(other, "user"); // сохраняем чат у получателя автоматически
+
+      if (currentChatType === "user" && currentChatWith === other) {
+        addMessageBubble(data.content, false, data.timestamp);
+      } else {
+        // Чат не открыт прямо сейчас — показываем уведомление и обновляем список
+        showIncomingNotification(other, data.content);
+        renderRecentChats();
+      }
+      playIncomingSound();
     }
     if (data.type === "ack") {
       const other = data.receiver; const key = `user:${other}`;
@@ -689,9 +828,14 @@ async function createGroup() {
 // ---- KEEP-ALIVE ----
 setInterval(() => { fetch(`${API_BASE}/health`).catch(() => {}); }, 10 * 60 * 1000);
 
+// ---- ПЕРИОДИЧЕСКАЯ ДОСИНХРОНИЗАЦИЯ КОНТАКТОВ ----
+// На случай если WS был отключен, когда пришло сообщение
+setInterval(() => { if (token) syncContactsFromServer(); }, 60 * 1000);
+
 // ---- EVENTS ----
 injectIcons();
 applyWallpaper();
+requestNotifyPermission();
 
 $("loginBtn").onclick    = login;
 $("registerBtn").onclick = register;
@@ -710,6 +854,9 @@ $("avatarFileInput").addEventListener("change", onAvatarFileChosen);
 $("settingsBtn").onclick     = openSettings;
 $("settingsBackBtn").onclick = closeSettings;
 $("soundToggleRow").onclick  = toggleSound;
+
+if ($("membersBtn"))     $("membersBtn").onclick     = openMembers;
+if ($("membersBackBtn")) $("membersBackBtn").onclick = closeMembers;
 
 $("fab").onclick        = toggleFab;
 $("fabContact").onclick = () => { closeFab(); openSearch(); };
