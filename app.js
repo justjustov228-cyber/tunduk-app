@@ -420,6 +420,7 @@ async function fetchMyGroups() {
 async function openUserChat(username) {
   currentChatWith = username; currentChatType = "user"; currentChatId = null; currentChatIsAdmin = false;
   $("chatWithLabel").textContent = username; $("chatSubLabel").textContent = "";
+  $("usersPanel").classList.add("hidden");
   $("chatPanel").classList.add("active");
   $("inputBar").classList.remove("readonly");
   const profile = await fetchUserProfile(username);
@@ -437,6 +438,7 @@ async function openChannelChat(ch) {
   }
   $("chatWithLabel").textContent = ch.name;
   $("chatSubLabel").textContent  = `@${ch.handle} · канал`;
+  $("usersPanel").classList.add("hidden");
   $("chatPanel").classList.add("active");
   currentChatIsAdmin ? $("inputBar").classList.remove("readonly") : $("inputBar").classList.add("readonly");
   renderAvatarInto($("chatAvatarSmall"), ch.name, ch.avatar);
@@ -453,6 +455,7 @@ async function openGroupChat(gr) {
   }
   $("chatWithLabel").textContent = gr.name;
   $("chatSubLabel").textContent  = gr.handle ? `@${gr.handle} · группа` : "группа";
+  $("usersPanel").classList.add("hidden");
   $("chatPanel").classList.add("active");
   $("inputBar").classList.remove("readonly");
   renderAvatarInto($("chatAvatarSmall"), gr.name, gr.avatar);
@@ -463,6 +466,7 @@ async function openGroupChat(gr) {
 function closeChat() {
   currentChatWith = null; currentChatType = "user"; currentChatId = null;
   $("chatPanel").classList.remove("active");
+  $("usersPanel").classList.remove("hidden");
   renderRecentChats();
 }
 
