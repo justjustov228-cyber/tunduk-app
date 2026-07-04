@@ -18,12 +18,44 @@
     <div class="wordmark">tun<span class="light">duk</span></div>
     <p class="subtitle">тундук — окно к миру</p>
 
-    <div id="authForm">
-      <input id="username" type="text" placeholder="Имя пользователя" autocomplete="off">
-      <input id="password" type="password" placeholder="Пароль" autocomplete="off">
-      <div id="authError"></div>
-      <button id="loginBtn">Войти</button>
-      <button id="registerBtn" class="secondary">Зарегистрироваться</button>
+    <!-- Экран 1: логин или начало регистрации -->
+    <div id="authChoice">
+      <button id="showLoginBtn">Войти</button>
+      <button id="showRegisterBtn" class="secondary">Зарегистрироваться</button>
+    </div>
+
+    <!-- Форма входа -->
+    <div id="loginForm" class="hidden">
+      <input id="loginEmail" type="email" placeholder="Почта" autocomplete="off">
+      <input id="loginUsername" type="text" placeholder="Имя пользователя" autocomplete="off">
+      <input id="loginPassword" type="password" placeholder="Пароль" autocomplete="off">
+      <div id="loginError" class="authError"></div>
+      <button id="loginSubmitBtn">Войти</button>
+      <button id="loginBackBtn" class="secondary">Назад</button>
+    </div>
+
+    <!-- Форма регистрации: шаг 1 (данные) -->
+    <div id="registerForm" class="hidden">
+      <input id="regFirstName" type="text" placeholder="Имя" autocomplete="off">
+      <input id="regLastName" type="text" placeholder="Фамилия" autocomplete="off">
+      <input id="regEmail" type="email" placeholder="Почта" autocomplete="off">
+      <div id="regUsernameWrap" style="position:relative;">
+        <input id="regUsername" type="text" placeholder="Имя пользователя" autocomplete="off">
+        <span id="regUsernameStatus" class="usernameStatus"></span>
+      </div>
+      <input id="regPassword" type="password" placeholder="Пароль" autocomplete="off">
+      <div id="registerError" class="authError"></div>
+      <button id="registerSubmitBtn">Продолжить</button>
+      <button id="registerBackBtn" class="secondary">Назад</button>
+    </div>
+
+    <!-- Форма регистрации: шаг 2 (код с почты) -->
+    <div id="verifyForm" class="hidden">
+      <p class="verifyHint">Мы отправили код на <span id="verifyEmailLabel"></span></p>
+      <input id="verifyCode" type="text" placeholder="Код из письма" autocomplete="off" maxlength="6" inputmode="numeric">
+      <div id="verifyError" class="authError"></div>
+      <button id="verifySubmitBtn">Подтвердить</button>
+      <button id="verifyBackBtn" class="secondary">Назад</button>
     </div>
   </div>
 
@@ -268,4 +300,4 @@
 
   <script src="app.js"></script>
 </body>
-              </html>
+            </html>
