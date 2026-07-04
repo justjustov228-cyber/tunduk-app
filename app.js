@@ -1,4 +1,3 @@
-alert("app.js loaded, version check");
 // ======= НАСТРОЙКИ =======
 const API_BASE = "https://tunduk-messenger.onrender.com";
 const WS_BASE  = "wss://tunduk-messenger.onrender.com";
@@ -219,7 +218,6 @@ async function onRegUsernameInput() {
 
 // ---- AUTH: регистрация шаг 1 — отправка данных, получение кода на почту ----
 async function registerStart() {
-  alert("registerStart called, API_BASE=" + API_BASE);
   const firstName = $("regFirstName").value.trim();
   const lastName  = $("regLastName").value.trim();
   const email     = $("regEmail").value.trim();
@@ -969,6 +967,12 @@ $("loginBackBtn").onclick    = showAuthChoice;
 $("loginSubmitBtn").onclick  = loginSubmit;
 $("registerBackBtn").onclick = showAuthChoice;
 $("registerSubmitBtn").onclick = registerStart;
+$("alreadyGotCodeBtn").onclick = () => {
+  const email = $("regEmail").value.trim();
+  if (!email) { $("registerError").textContent = "Сначала укажи почту"; return; }
+  pendingRegistrationEmail = email;
+  showVerifyForm(email);
+};
 $("regUsername").addEventListener("input", onRegUsernameInput);
 $("verifyBackBtn").onclick   = showRegisterForm;
 $("verifySubmitBtn").onclick = registerVerify;
