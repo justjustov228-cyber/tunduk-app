@@ -148,38 +148,161 @@ function updateMyAvatarUI() {
   renderAvatarInto($("myAvatarSmall"), myUsername, myAvatar);
 }
 
-// ---- AUTH ----
-async function register() {
-  const username = $("username").value.trim();
-  const password = $("password").value;
-  $("authError").textContent = "";
-  if (!username || !password) { $("authError").textContent = "Заполни имя и пароль"; return; }
-  try {
-    const res  = await fetch(`${API_BASE}/register`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username, password }) });
-    const data = await res.json();
-    if (!res.ok) { $("authError").textContent = data.detail || "Ошибка регистрации"; return; }
-    await login();
-  } catch (e) { $("authError").textContent = "Сервер не отвечает: " + e.message; }
+// ---- AUTH: экраны ----
+function showAuthChoice() {
+  $("authChoice").classList.remove("hidden");
+  $("loginForm").classList.add("hidden");
+  $("registerForm").classList.add("hidden");
+  $("verifyForm").classList.add("hidden");
+}
+function showLoginForm() {
+  $("authChoice").classList.add("hidden");
+  $("loginForm").classList.remove("hidden");
+  $("registerForm").classList.add("hidden");
+  $("verifyForm").classList.add("hidden");
+  $("loginError").textContent = "";
+}
+function showRegisterForm() {
+  $("authChoice").classList.add("hidden");
+  $("loginForm").classList.add("hidden");
+  $("registerForm").classList.remove("hidden");
+  $("verifyForm").classList.add("hidden");
+  $("registerError").textContent = "";
+}
+function showVerifyForm(email) {
+  $("authChoice").classList.add("hidden");
+  $("loginForm").classList.add("hidden");
+  $("registerForm").classList.add("hidden");
+  $("verifyForm").classList.remove("hidden");
+  $("verifyEmailLabel").textContent = email;
+  $("verifyError").textContent = "";
+  $("verifyCode").value = "";
 }
 
-async function login() {
-  const username = $("username").value.trim();
-  const password = $("password").value;
-  $("authError").textContent = "";
-  if (!username || !password) { $("authError").textContent = "Заполни имя и пароль"; return; }
+// ---- AUTH: проверка занятости username в реальном времени ----
+let usernameCheckDebounce = null;
+let pendingRegistrationEmail = null;
+
+async function onRegUsernameInput() {
+  const username = $("regUsername").value.trim();
+  const statusEl = $("regUsernameStatus");
+  clearTimeout(usernameCheckDebounce);
+
+  if (!username) { statusEl.textContent = ""; statusEl.className = "usernameStatus"; return; }
+  if (username.length < 3) {
+    statusEl.textContent = "мин. 3 симв.";
+    statusEl.className = "usernameStatus taken";
+    return;
+  }
+
+  statusEl.textContent = "проверка...";
+  statusEl.className = "usernameStatus checking";
+
+  usernameCheckDebounce = setTimeout(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/check-username/${encodeURIComponent(username)}`);
+      const data = await res.json();
+      if (data.available) {
+        statusEl.textContent = "свободно";
+        statusEl.className = "usernameStatus available";
+      } else {
+        statusEl.textContent = data.reason || "занято";
+        statusEl.className = "usernameStatus taken";
+      }
+    } catch {
+      statusEl.textContent = "";
+      statusEl.className = "usernameStatus";
+    }
+  }, 400);
+}
+
+// ---- AUTH: регистрация шаг 1 — отправка данных, получение кода на почту ----
+async function registerStart() {
+  const firstName = $("regFirstName").value.trim();
+  const lastName  = $("regLastName").value.trim();
+  const email     = $("regEmail").value.trim();
+  const username  = $("regUsername").value.trim();
+  const password  = $("regPassword").value;
+  const errEl     = $("registerError");
+  errEl.textContent = "";
+
+  if (!firstName || !lastName) { errEl.textContent = "Укажи имя и фамилию"; return; }
+  if (!email) { errEl.textContent = "Укажи почту"; return; }
+  if (!username || username.length < 3) { errEl.textContent = "Имя пользователя минимум 3 символа"; return; }
+  if (!password || password.length < 4) { errEl.textContent = "Пароль минимум 4 символа"; return; }
+
   try {
-    const body = new URLSearchParams();
-    body.append("username", username);
-    body.append("password", password);
-    body.append("grant_type", "password");
-    const res  = await fetch(`${API_BASE}/login`, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: body.toString() });
+    const res = await fetch(`${API_BASE}/register/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, first_name: firstName, last_name: lastName, username, password }),
+    });
     const data = await res.json();
-    if (!res.ok) { $("authError").textContent = data.detail || "Ошибка входа"; return; }
+    if (!res.ok) { errEl.textContent = data.detail || "Ошибка регистрации"; return; }
+    pendingRegistrationEmail = email;
+    showVerifyForm(email);
+  } catch (e) {
+    errEl.textContent = "Сервер не отвечает: " + e.message;
+  }
+}
+
+// ---- AUTH: регистрация шаг 2 — подтверждение кода ----
+async function registerVerify() {
+  const code  = $("verifyCode").value.trim();
+  const errEl = $("verifyError");
+  errEl.textContent = "";
+
+  if (!code) { errEl.textContent = "Введи код из письма"; return; }
+  if (!pendingRegistrationEmail) { errEl.textContent = "Начни регистрацию заново"; showRegisterForm(); return; }
+
+  try {
+    const res = await fetch(`${API_BASE}/register/verify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: pendingRegistrationEmail, code }),
+    });
+    const data = await res.json();
+    if (!res.ok) { errEl.textContent = data.detail || "Неверный код"; return; }
+
+    // Регистрация окончена — сразу логиним, используя данные, которые уже ввёл пользователь
+    const email    = pendingRegistrationEmail;
+    const username = $("regUsername").value.trim();
+    const password = $("regPassword").value;
+    await performLogin(email, username, password);
+  } catch (e) {
+    errEl.textContent = "Сервер не отвечает: " + e.message;
+  }
+}
+
+// ---- AUTH: вход ----
+async function loginSubmit() {
+  const email    = $("loginEmail").value.trim();
+  const username = $("loginUsername").value.trim();
+  const password = $("loginPassword").value;
+  const errEl    = $("loginError");
+  errEl.textContent = "";
+
+  if (!email || !username || !password) { errEl.textContent = "Заполни все поля"; return; }
+  await performLogin(email, username, password, errEl);
+}
+
+async function performLogin(email, username, password, errEl) {
+  const targetErrEl = errEl || $("verifyError");
+  try {
+    const res = await fetch(`${API_BASE}/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, username, password }),
+    });
+    const data = await res.json();
+    if (!res.ok) { targetErrEl.textContent = data.detail || "Ошибка входа"; return; }
     token = data.access_token; myUsername = username;
     localStorage.setItem("tunduk_token", token);
     localStorage.setItem("tunduk_username", myUsername);
     showApp();
-  } catch (e) { $("authError").textContent = "Сервер не отвечает: " + e.message; }
+  } catch (e) {
+    targetErrEl.textContent = "Сервер не отвечает: " + e.message;
+  }
 }
 
 function logout() {
@@ -188,8 +311,9 @@ function logout() {
   localStorage.removeItem("tunduk_token");
   localStorage.removeItem("tunduk_username");
   messageCache = {}; userProfileCache = {};
-  $("username").value = ""; $("password").value = "";
+  pendingRegistrationEmail = null;
   setStatus("не подключено", false);
+  showAuthChoice();
   showAuth();
 }
 
@@ -837,8 +961,16 @@ injectIcons();
 applyWallpaper();
 requestNotifyPermission();
 
-$("loginBtn").onclick    = login;
-$("registerBtn").onclick = register;
+$("showLoginBtn").onclick    = showLoginForm;
+$("showRegisterBtn").onclick = showRegisterForm;
+$("loginBackBtn").onclick    = showAuthChoice;
+$("loginSubmitBtn").onclick  = loginSubmit;
+$("registerBackBtn").onclick = showAuthChoice;
+$("registerSubmitBtn").onclick = registerStart;
+$("regUsername").addEventListener("input", onRegUsernameInput);
+$("verifyBackBtn").onclick   = showRegisterForm;
+$("verifySubmitBtn").onclick = registerVerify;
+$("verifyCode").addEventListener("keypress", e => { if (e.key === "Enter") registerVerify(); });
 $("logoutBtn").onclick   = logout;
 $("backBtn").onclick     = closeChat;
 $("sendBtn").onclick     = sendMessage;
@@ -888,4 +1020,4 @@ document.addEventListener("click", e => {
 });
 
 // ---- INIT ----
-if (token && myUsername) { showApp(); } else { showAuth(); }
+if (token && myUsername) { showApp(); } else { showAuth(); showAuthChoice(); }
