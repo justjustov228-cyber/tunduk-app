@@ -1,3 +1,4 @@
+alert("app.js loaded, version check");
 // ======= НАСТРОЙКИ =======
 const API_BASE = "https://tunduk-messenger.onrender.com";
 const WS_BASE  = "wss://tunduk-messenger.onrender.com";
