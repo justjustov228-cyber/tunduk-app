@@ -1,6 +1,9 @@
 // ======= НАСТРОЙКИ =======
 const API_BASE = "https://tunduk-messenger.onrender.com";
 const WS_BASE  = "wss://tunduk-messenger.onrender.com";
+const EMAILJS_SERVICE_ID  = "service_j6m6xnp";
+const EMAILJS_TEMPLATE_ID = "template_54zk08p";
+const EMAILJS_PUBLIC_KEY  = "UMCdIt1zmhOihzHmr";
 // ==========================
 
 let token        = localStorage.getItem("tunduk_token")    || null;
@@ -244,6 +247,20 @@ async function registerStart() {
     });
     const data = await res.json();
     if (!res.ok) { errEl.textContent = data.detail || "Ошибка регистрации"; return; }
+
+    // Бэкенд сгенерировал код, теперь отправляем письмо через EmailJS с фронтенда
+    btn.textContent = "Отправка письма...";
+    try {
+      await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+        to_email: email,
+        first_name: firstName,
+        code: data.code,
+      }, EMAILJS_PUBLIC_KEY);
+    } catch (emailErr) {
+      errEl.textContent = "Не удалось отправить письмо. Попробуй ещё раз.";
+      return;
+    }
+
     pendingRegistrationEmail = email;
     showVerifyForm(email);
   } catch (e) {
@@ -965,6 +982,10 @@ setInterval(() => { fetch(`${API_BASE}/health`).catch(() => {}); }, 10 * 60 * 10
 setInterval(() => { if (token) syncContactsFromServer(); }, 60 * 1000);
 
 // ---- EVENTS ----
+if (typeof emailjs !== "undefined") {
+  emailjs.init({ publicKey: EMAILJS_PUBLIC_KEY });
+}
+
 injectIcons();
 applyWallpaper();
 requestNotifyPermission();
