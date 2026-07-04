@@ -219,6 +219,7 @@ async function onRegUsernameInput() {
 
 // ---- AUTH: регистрация шаг 1 — отправка данных, получение кода на почту ----
 async function registerStart() {
+  alert("registerStart called, API_BASE=" + API_BASE);
   const firstName = $("regFirstName").value.trim();
   const lastName  = $("regLastName").value.trim();
   const email     = $("regEmail").value.trim();
