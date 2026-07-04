@@ -288,5 +288,18 @@
   </div>
 
   <script src="app.js"></script>
+          <script>
+  fetch('style.css')
+    .then(r => {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.text();
+    })
+    .then(css => {
+      alert('style.css загружен, длина: ' + css.length + ' символов');
+    })
+    .catch(err => {
+      alert('ОШИБКА загрузки style.css: ' + err.message);
+    });
+        </script>
 </body>
           </html>
