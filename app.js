@@ -224,12 +224,17 @@ async function registerStart() {
   const username  = $("regUsername").value.trim();
   const password  = $("regPassword").value;
   const errEl     = $("registerError");
+  const btn       = $("registerSubmitBtn");
   errEl.textContent = "";
 
   if (!firstName || !lastName) { errEl.textContent = "Укажи имя и фамилию"; return; }
   if (!email) { errEl.textContent = "Укажи почту"; return; }
   if (!username || username.length < 3) { errEl.textContent = "Имя пользователя минимум 3 символа"; return; }
   if (!password || password.length < 4) { errEl.textContent = "Пароль минимум 4 символа"; return; }
+
+  if (btn.disabled) return; // защита от двойного нажатия
+  btn.disabled = true;
+  btn.textContent = "Отправка...";
 
   try {
     const res = await fetch(`${API_BASE}/register/start`, {
@@ -243,6 +248,9 @@ async function registerStart() {
     showVerifyForm(email);
   } catch (e) {
     errEl.textContent = "Сервер не отвечает: " + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Продолжить";
   }
 }
 
