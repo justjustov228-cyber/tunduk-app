@@ -438,3 +438,28 @@ body {
   display: flex; align-items: center; cursor: pointer; padding: 4px;
 }
 #membersBtn.hidden { display: none; }
+
+/* ---- Multi-step auth forms ---- */
+#authChoice, #loginForm, #registerForm, #verifyForm {
+  width: 100%; max-width: 300px; display: flex; flex-direction: column; gap: 10px;
+  opacity: 0; animation: fadeUp 0.6s ease-out forwards; animation-delay: 1.05s;
+}
+#authChoice.hidden, #loginForm.hidden, #registerForm.hidden, #verifyForm.hidden { display: none; }
+
+.authError {
+  color: #d9694f; font-size: 13px; min-height: 18px; text-align: center;
+}
+
+.verifyHint {
+  color: #8b8f99; font-size: 13px; text-align: center; margin: 0 0 4px;
+}
+.verifyHint span { color: #e8a23d; font-weight: 600; }
+
+#regUsernameWrap { position: relative; }
+.usernameStatus {
+  position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+  font-size: 12px; font-weight: 600; pointer-events: none;
+}
+.usernameStatus.checking { color: #8b8f99; }
+.usernameStatus.available { color: #5fb86e; }
+.usernameStatus.taken { color: #d9694f; }
