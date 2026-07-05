@@ -558,6 +558,11 @@ body {
 }
 .verifyHint span { color: #e8a23d; font-weight: 600; }
 
+.verifySpamHint {
+  color: #6b6f7a; font-size: 12px; text-align: center; margin: 0 0 4px;
+  line-height: 1.4;
+}
+
 #regUsernameWrap { position: relative; }
 .usernameStatus {
   position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
