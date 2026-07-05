@@ -49,6 +49,11 @@ const ICONS = {
   members: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
   shield:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`,
   info:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>`,
+  attach:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="19" height="19"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>`,
+  mic:     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="19" height="19"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`,
+  trash:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="17" height="17"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>`,
+  play:    `<svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><polygon points="6 3 20 12 6 21 6 3"/></svg>`,
+  pause:   `<svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>`,
 };
 
 function injectIcons() {
@@ -66,6 +71,10 @@ function injectIcons() {
   if ($("membersBtn")) $("membersBtn").innerHTML = ICONS.members;
   if ($("membersBackBtn")) $("membersBackBtn").innerHTML = ICONS.back;
   $("joinPreviewBackBtn").innerHTML = ICONS.back;
+  $("attachBtn").innerHTML = ICONS.attach;
+  $("micBtn").innerHTML = ICONS.mic;
+  $("cancelRecordingBtn").innerHTML = ICONS.trash;
+  $("sendRecordingBtn").innerHTML = ICONS.send;
 }
 
 function setStatus(text, online) {
@@ -608,6 +617,7 @@ async function fetchGroupMembers(id) {
 
 // ---- CHAT OPEN ----
 async function openUserChat(username) {
+  resetInputBar();
   currentChatWith = username; currentChatType = "user"; currentChatId = null; currentChatIsAdmin = false; currentChatIsOwner = false;
   $("chatWithLabel").textContent = username; $("chatSubLabel").textContent = "";
   $("usersPanel").classList.add("hidden");
@@ -621,6 +631,7 @@ async function openUserChat(username) {
 }
 
 async function openChannelChat(ch) {
+  resetInputBar();
   currentChatWith = null; currentChatType = "channel"; currentChatId = ch.id;
   currentChatIsOwner = ch.owner_username === myUsername;
 
@@ -644,6 +655,7 @@ async function openChannelChat(ch) {
 }
 
 async function openGroupChat(gr) {
+  resetInputBar();
   currentChatWith = null; currentChatType = "group"; currentChatId = gr.id;
   currentChatIsOwner = gr.owner_username === myUsername;
 
@@ -667,6 +679,7 @@ async function openGroupChat(gr) {
 }
 
 function closeChat() {
+  resetInputBar();
   currentChatWith = null; currentChatType = "user"; currentChatId = null;
   $("chatPanel").classList.remove("active");
   $("usersPanel").classList.remove("hidden");
@@ -817,7 +830,11 @@ async function loadUserHistory(username) {
     const res = await fetch(`${API_BASE}/messages/${encodeURIComponent(username)}`, { headers: { Authorization: `Bearer ${token}` } });
     if (res.status === 401) { logout(); return; }
     const history = await res.json();
-    messageCache[`user:${username}`] = history.map(m => ({ content: m.content, timestamp: m.timestamp, mine: myUserId !== null && m.sender_id === myUserId, delivered: m.delivered }));
+    messageCache[`user:${username}`] = history.map(m => ({
+      content: m.content, timestamp: m.timestamp,
+      mine: myUserId !== null && m.sender_id === myUserId, delivered: m.delivered,
+      message_type: m.message_type, media_data: m.media_data, duration: m.duration,
+    }));
     renderMessages(`user:${username}`);
   } catch { $("messages").innerHTML = `<div style="text-align:center;color:#f44336;padding:20px;">Ошибка загрузки</div>`; }
 }
@@ -828,7 +845,10 @@ async function loadChannelHistory(id) {
     const res = await fetch(`${API_BASE}/channels/${id}/messages`, { headers: { Authorization: `Bearer ${token}` } });
     if (!res.ok) { $("messages").innerHTML = `<div style="text-align:center;color:#f44336;padding:20px;">Нет доступа</div>`; return; }
     const history = await res.json();
-    messageCache[`channel:${id}`] = history.map(m => ({ content: m.content, timestamp: m.timestamp, mine: m.sender_username === myUsername, senderName: m.sender_username }));
+    messageCache[`channel:${id}`] = history.map(m => ({
+      content: m.content, timestamp: m.timestamp, mine: m.sender_username === myUsername, senderName: m.sender_username,
+      message_type: m.message_type, media_data: m.media_data, duration: m.duration,
+    }));
     renderMessages(`channel:${id}`);
   } catch { $("messages").innerHTML = `<div style="text-align:center;color:#f44336;padding:20px;">Ошибка</div>`; }
 }
@@ -839,7 +859,10 @@ async function loadGroupHistory(id) {
     const res = await fetch(`${API_BASE}/groups/${id}/messages`, { headers: { Authorization: `Bearer ${token}` } });
     if (!res.ok) { $("messages").innerHTML = `<div style="text-align:center;color:#f44336;padding:20px;">Нет доступа</div>`; return; }
     const history = await res.json();
-    messageCache[`group:${id}`] = history.map(m => ({ content: m.content, timestamp: m.timestamp, mine: m.sender_username === myUsername, senderName: m.sender_username }));
+    messageCache[`group:${id}`] = history.map(m => ({
+      content: m.content, timestamp: m.timestamp, mine: m.sender_username === myUsername, senderName: m.sender_username,
+      message_type: m.message_type, media_data: m.media_data, duration: m.duration,
+    }));
     renderMessages(`group:${id}`);
   } catch { $("messages").innerHTML = `<div style="text-align:center;color:#f44336;padding:20px;">Ошибка</div>`; }
 }
@@ -847,20 +870,86 @@ async function loadGroupHistory(id) {
 function renderMessages(cacheKey) {
   const container = $("messages");
   container.innerHTML = "";
-  (messageCache[cacheKey] || []).forEach(m => addMessageBubble(m.content, m.mine, m.timestamp, m.delivered, m.senderName));
+  (messageCache[cacheKey] || []).forEach(m => addMessageBubble(m));
   container.scrollTop = container.scrollHeight;
 }
 
-function addMessageBubble(content, mine, timestamp, delivered, senderName) {
+function formatDuration(sec) {
+  sec = Math.max(0, Math.round(sec || 0));
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+function openImageViewer(src) {
+  const overlay = document.createElement("div");
+  overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:999;display:flex;align-items:center;justify-content:center;padding:24px;";
+  const img = document.createElement("img");
+  img.src = src;
+  img.style.cssText = "max-width:100%;max-height:100%;border-radius:8px;object-fit:contain;";
+  overlay.appendChild(img);
+  overlay.onclick = () => overlay.remove();
+  document.body.appendChild(overlay);
+}
+
+function setupVoiceBubble(div, src, totalDuration) {
+  const audio = new Audio(src);
+  const playBtn = div.querySelector(".voicePlayBtn");
+  const progress = div.querySelector(".voiceProgress");
+  const timeLabel = div.querySelector(".voiceTimeLabel");
+  let playing = false;
+
+  playBtn.onclick = () => {
+    if (playing) { audio.pause(); return; }
+    document.querySelectorAll("audio.tundukVoice").forEach(a => { if (a !== audio) a.pause(); });
+    audio.play().catch(() => {});
+  };
+  audio.className = "tundukVoice";
+  audio.addEventListener("play", () => { playing = true; playBtn.innerHTML = ICONS.pause; });
+  audio.addEventListener("pause", () => { playing = false; playBtn.innerHTML = ICONS.play; });
+  audio.addEventListener("ended", () => {
+    playing = false; playBtn.innerHTML = ICONS.play;
+    progress.style.width = "0%"; timeLabel.textContent = formatDuration(totalDuration);
+  });
+  audio.addEventListener("timeupdate", () => {
+    const dur = audio.duration && isFinite(audio.duration) ? audio.duration : totalDuration;
+    if (dur > 0) progress.style.width = `${Math.min(100, (audio.currentTime / dur) * 100)}%`;
+    timeLabel.textContent = formatDuration(Math.max(0, dur - audio.currentTime));
+  });
+  div.querySelector(".voiceTrack").onclick = e => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+    const dur = audio.duration && isFinite(audio.duration) ? audio.duration : totalDuration;
+    audio.currentTime = ratio * dur;
+  };
+}
+
+function addMessageBubble(m) {
   const container = $("messages");
   const div = document.createElement("div");
-  div.className = "msg " + (mine ? "mine" : "theirs");
-  const time = timestamp ? new Date(timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+  const mine = m.mine;
+  const type = m.message_type || "text";
+  const time = m.timestamp ? new Date(m.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
   let tick = "";
-  if (mine && currentChatType === "user") tick = delivered ? `<span class="tick delivered">${ICONS.tickTwo}</span>` : `<span class="tick">${ICONS.tickOne}</span>`;
+  if (mine && currentChatType === "user") tick = m.delivered ? `<span class="tick delivered">${ICONS.tickTwo}</span>` : `<span class="tick">${ICONS.tickOne}</span>`;
   let nameHtml = "";
-  if (!mine && senderName && currentChatType !== "user") nameHtml = `<div class="senderName">${escapeHtml(senderName)}</div>`;
-  div.innerHTML = `${nameHtml}${escapeHtml(content)}<div class="meta">${time}${tick}</div>`;
+  if (!mine && m.senderName && currentChatType !== "user") nameHtml = `<div class="senderName">${escapeHtml(m.senderName)}</div>`;
+
+  if (type === "image") {
+    const hasCaption = !!(m.content && m.content.trim());
+    div.className = "msg image " + (mine ? "mine" : "theirs") + (hasCaption ? "" : " noCaption");
+    div.innerHTML = `${nameHtml}<img src="${m.media_data}" alt="">${hasCaption ? `<div class="caption">${escapeHtml(m.content)}</div>` : ""}<div class="meta">${time}${tick}</div>`;
+    div.querySelector("img").onclick = () => openImageViewer(m.media_data);
+  } else if (type === "voice") {
+    div.className = "msg voice " + (mine ? "mine" : "theirs");
+    const durLabel = formatDuration(m.duration || 0);
+    div.innerHTML = `${nameHtml}<button class="voicePlayBtn" type="button">${ICONS.play}</button><div class="voiceBody"><div class="voiceTrack"><div class="voiceProgress"></div></div><div class="voiceMeta"><span class="voiceTimeLabel">${durLabel}</span><span>${time}${tick}</span></div></div>`;
+    setupVoiceBubble(div, m.media_data, m.duration || 0);
+  } else {
+    div.className = "msg " + (mine ? "mine" : "theirs");
+    div.innerHTML = `${nameHtml}${escapeHtml(m.content)}<div class="meta">${time}${tick}</div>`;
+  }
+
   container.appendChild(div);
   container.scrollTop = container.scrollHeight;
 }
@@ -868,22 +957,149 @@ function addMessageBubble(content, mine, timestamp, delivered, senderName) {
 function escapeHtml(str) { const d = document.createElement("div"); d.textContent = str; return d.innerHTML; }
 
 // ---- SEND ----
-async function sendMessage() {
-  const input = $("msgInput"); const content = input.value.trim(); if (!content) return;
+async function sendChatPayload(payload) {
+  // payload: { content, message_type, media_data?, duration? }
   if (currentChatType === "user") {
-    if (!ws || ws.readyState !== WebSocket.OPEN) { alert("Нет соединения"); return; }
-    ws.send(JSON.stringify({ receiver: currentChatWith, content }));
-    input.value = ""; return;
+    if (!ws || ws.readyState !== WebSocket.OPEN) { alert("Нет соединения"); return false; }
+    ws.send(JSON.stringify({ receiver: currentChatWith, ...payload }));
+    return true;
   }
   if (currentChatType === "channel") {
-    if (!currentChatIsAdmin) return;
-    const res = await fetch(`${API_BASE}/channels/${currentChatId}/messages`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ content }) });
-    if (res.ok) { const msg = await res.json(); const key = `channel:${currentChatId}`; if (!messageCache[key]) messageCache[key] = []; messageCache[key].push({ content: msg.content, timestamp: msg.timestamp, mine: true, senderName: myUsername }); addMessageBubble(msg.content, true, msg.timestamp, false, myUsername); input.value = ""; } return;
+    if (!currentChatIsAdmin) return false;
+    try {
+      const res = await fetch(`${API_BASE}/channels/${currentChatId}/messages`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify(payload) });
+      const msg = await res.json();
+      if (!res.ok) { alert(msg.detail || "Ошибка отправки"); return false; }
+      const key = `channel:${currentChatId}`;
+      if (!messageCache[key]) messageCache[key] = [];
+      const entry = { content: msg.content, timestamp: msg.timestamp, mine: true, senderName: myUsername, message_type: msg.message_type, media_data: msg.media_data, duration: msg.duration };
+      messageCache[key].push(entry);
+      addMessageBubble(entry);
+      return true;
+    } catch { alert("Сервер не отвечает"); return false; }
   }
   if (currentChatType === "group") {
-    const res = await fetch(`${API_BASE}/groups/${currentChatId}/messages`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ content }) });
-    if (res.ok) { const msg = await res.json(); const key = `group:${currentChatId}`; if (!messageCache[key]) messageCache[key] = []; messageCache[key].push({ content: msg.content, timestamp: msg.timestamp, mine: true, senderName: myUsername }); addMessageBubble(msg.content, true, msg.timestamp, false, myUsername); input.value = ""; }
+    try {
+      const res = await fetch(`${API_BASE}/groups/${currentChatId}/messages`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify(payload) });
+      const msg = await res.json();
+      if (!res.ok) { alert(msg.detail || "Ошибка отправки"); return false; }
+      const key = `group:${currentChatId}`;
+      if (!messageCache[key]) messageCache[key] = [];
+      const entry = { content: msg.content, timestamp: msg.timestamp, mine: true, senderName: myUsername, message_type: msg.message_type, media_data: msg.media_data, duration: msg.duration };
+      messageCache[key].push(entry);
+      addMessageBubble(entry);
+      return true;
+    } catch { alert("Сервер не отвечает"); return false; }
   }
+  return false;
+}
+
+async function sendMessage() {
+  const input = $("msgInput"); const content = input.value.trim(); if (!content) return;
+  const ok = await sendChatPayload({ content, message_type: "text" });
+  if (ok !== false) { input.value = ""; updateSendControls(); }
+}
+
+function pickChatImage() { $("chatImageInput").click(); }
+
+function onChatImageChosen(e) {
+  const file = e.target.files[0]; if (!file) return;
+  e.target.value = "";
+  resizeChatImage(file, dataUrl => sendChatPayload({ content: "", message_type: "image", media_data: dataUrl }));
+}
+
+function resizeChatImage(file, callback, maxSize = 1280) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = new Image();
+    img.onload = () => {
+      let { width, height } = img;
+      if (width > height) { if (width > maxSize) { height = Math.round(height * maxSize / width); width = maxSize; } }
+      else { if (height > maxSize) { width = Math.round(width * maxSize / height); height = maxSize; } }
+      const canvas = document.createElement("canvas");
+      canvas.width = width; canvas.height = height;
+      canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+      callback(canvas.toDataURL("image/jpeg", 0.75));
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+// ---- VOICE RECORDING ----
+let mediaRecorder = null;
+let recordingStream = null;
+let recordedChunks = [];
+let recordingStartTime = null;
+let recordingTimerInterval = null;
+
+function updateSendControls() {
+  const hasText = $("msgInput").value.trim().length > 0;
+  $("micBtn").classList.toggle("hidden", hasText);
+  $("sendBtn").classList.toggle("hidden", !hasText);
+}
+
+function resetInputBar() {
+  if (mediaRecorder) stopVoiceRecording(false);
+  $("msgInput").value = "";
+  updateSendControls();
+}
+
+async function startVoiceRecording() {
+  if (currentChatType === "channel" && !currentChatIsAdmin) return;
+  if (mediaRecorder) return;
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { alert("Микрофон не поддерживается этим браузером"); return; }
+  try {
+    recordingStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch {
+    alert("Нет доступа к микрофону");
+    return;
+  }
+  recordedChunks = [];
+  let mimeType = "audio/webm;codecs=opus";
+  if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = "audio/webm";
+  if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = "";
+  try {
+    mediaRecorder = mimeType ? new MediaRecorder(recordingStream, { mimeType }) : new MediaRecorder(recordingStream);
+  } catch {
+    alert("Запись голосовых не поддерживается этим браузером");
+    recordingStream.getTracks().forEach(t => t.stop());
+    recordingStream = null;
+    return;
+  }
+  mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+  mediaRecorder.start();
+  recordingStartTime = Date.now();
+  $("inputBar").classList.add("hidden");
+  $("recordingBar").classList.remove("hidden");
+  $("recordingTimer").textContent = "0:00";
+  recordingTimerInterval = setInterval(() => {
+    $("recordingTimer").textContent = formatDuration((Date.now() - recordingStartTime) / 1000);
+  }, 250);
+}
+
+function stopVoiceRecording(shouldSend) {
+  if (!mediaRecorder) return;
+  clearInterval(recordingTimerInterval);
+  const durationSeconds = Math.round((Date.now() - recordingStartTime) / 1000);
+  const recorder = mediaRecorder;
+  const streamToStop = recordingStream;
+  const wantSend = shouldSend && durationSeconds >= 1;
+  mediaRecorder = null;
+
+  recorder.onstop = () => {
+    streamToStop.getTracks().forEach(t => t.stop());
+    $("recordingBar").classList.add("hidden");
+    $("inputBar").classList.remove("hidden");
+    updateSendControls();
+    if (!wantSend) { recordedChunks = []; return; }
+    const blob = new Blob(recordedChunks, { type: recorder.mimeType || "audio/webm" });
+    recordedChunks = [];
+    const reader = new FileReader();
+    reader.onload = () => { sendChatPayload({ content: "", message_type: "voice", media_data: reader.result, duration: durationSeconds }); };
+    reader.readAsDataURL(blob);
+  };
+  recorder.stop();
 }
 
 // ---- SOUND ----
@@ -931,16 +1147,18 @@ function connectWebSocket() {
     if (data.type === "message") {
       const other = data.sender; const key = `user:${other}`;
       if (!messageCache[key]) messageCache[key] = [];
-      messageCache[key].push({ content: data.content, mine: false, timestamp: data.timestamp });
+      const entry = { content: data.content, mine: false, timestamp: data.timestamp, message_type: data.message_type, media_data: data.media_data, duration: data.duration };
+      messageCache[key].push(entry);
 
       const wasNewChat = !getRecentChats().includes(key);
       addRecentChat(other, "user"); // сохраняем чат у получателя автоматически
 
       if (currentChatType === "user" && currentChatWith === other) {
-        addMessageBubble(data.content, false, data.timestamp);
+        addMessageBubble(entry);
       } else {
         // Чат не открыт прямо сейчас — показываем уведомление и обновляем список
-        showIncomingNotification(other, data.content);
+        const preview = data.message_type === "image" ? "Фото" : data.message_type === "voice" ? "Голосовое сообщение" : data.content;
+        showIncomingNotification(other, preview);
         renderRecentChats();
       }
       playIncomingSound();
@@ -948,8 +1166,9 @@ function connectWebSocket() {
     if (data.type === "ack") {
       const other = data.receiver; const key = `user:${other}`;
       if (!messageCache[key]) messageCache[key] = [];
-      messageCache[key].push({ content: data.content, mine: true, timestamp: data.timestamp, delivered: data.delivered });
-      if (currentChatType === "user" && currentChatWith === other) addMessageBubble(data.content, true, data.timestamp, data.delivered);
+      const entry = { content: data.content, mine: true, timestamp: data.timestamp, delivered: data.delivered, message_type: data.message_type, media_data: data.media_data, duration: data.duration };
+      messageCache[key].push(entry);
+      if (currentChatType === "user" && currentChatWith === other) addMessageBubble(entry);
     }
   };
 }
@@ -1088,6 +1307,12 @@ $("logoutBtn").onclick   = logout;
 $("backBtn").onclick     = closeChat;
 $("sendBtn").onclick     = sendMessage;
 $("msgInput").addEventListener("keypress", e => { if (e.key === "Enter") sendMessage(); });
+$("msgInput").addEventListener("input", updateSendControls);
+$("attachBtn").onclick   = pickChatImage;
+$("chatImageInput").addEventListener("change", onChatImageChosen);
+$("micBtn").onclick            = startVoiceRecording;
+$("cancelRecordingBtn").onclick = () => stopVoiceRecording(false);
+$("sendRecordingBtn").onclick   = () => stopVoiceRecording(true);
 $("searchBtn").onclick     = openSearch;
 $("searchBackBtn").onclick = closeSearch;
 $("searchInput").addEventListener("input", onSearchInput);
