@@ -124,8 +124,22 @@
     </div>  
     <div id="messages"></div>  
     <div id="inputBar">  
+      <button id="attachBtn"></button>  
+      <input type="file" id="chatImageInput" accept="image/*" style="display:none;">  
       <input id="msgInput" type="text" placeholder="Сообщение...">  
-      <button id="sendBtn"></button>  
+      <button id="micBtn"></button>  
+      <button id="sendBtn" class="hidden"></button>  
+    </div>  
+    <div id="recordingBar" class="hidden">  
+      <div class="recordingLeft">  
+        <span class="recordingDot"></span>  
+        <span id="recordingTimer">0:00</span>  
+        <span class="recordingHint">Запись голосового...</span>  
+      </div>  
+      <div class="recordingActions">  
+        <button id="cancelRecordingBtn"></button>  
+        <button id="sendRecordingBtn"></button>  
+      </div>  
     </div>  
   </div>  
 
@@ -306,4 +320,4 @@
 </div>
 
   </div>    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>    <script src="app.js"></script>  </body>  
-          </html>
+              </html>
