@@ -463,3 +463,134 @@ body {
 .usernameStatus.checking { color: #8b8f99; }
 .usernameStatus.available { color: #5fb86e; }
 .usernameStatus.taken { color: #d9694f; }
+/* =========================
+   TUNDUK - ANIMATIONS CORE
+========================= */
+
+/* плавное появление страниц */
+#auth, #app, #searchPanel, #chatPanel, #settingsScreen, #profileScreen {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+/* скрытые экраны */
+.hidden {
+  display: none !important;
+}
+
+/* универсальное появление */
+.fade-in {
+  animation: fadeIn 0.25s ease forwards;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* универсальное исчезновение */
+.fade-out {
+  animation: fadeOut 0.2s ease forwards;
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* кнопки - мягкое нажатие */
+button {
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+button:active {
+  transform: scale(0.96);
+}
+
+/* карточки (чаты, списки) */
+.chatItem {
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.chatItem:hover {
+  transform: translateX(4px);
+}
+
+/* сообщения */
+.message {
+  animation: messageIn 0.2s ease;
+}
+
+@keyframes messageIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* FAB кнопка */
+#fab {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+#fab:hover {
+  transform: rotate(90deg) scale(1.05);
+}
+
+/* плавное появление меню */
+#fabMenu {
+  animation: fabMenuIn 0.18s ease;
+}
+
+@keyframes fabMenuIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* input focus */
+input, textarea {
+  transition: border 0.2s ease, transform 0.2s ease;
+}
+
+input:focus, textarea:focus {
+  transform: scale(1.01);
+  border-color: #4c7dff;
+}
+
+/* экран переключения (основа Telegram-подобного UI) */
+.screen {
+  opacity: 1;
+  transform: translateX(0);
+  transition: 0.25s ease;
+}
+
+.screen.switch-out {
+  opacity: 0;
+  transform: translateX(-10px);
+}
+
+.screen.switch-in {
+  opacity: 1;
+  transform: translateX(0);
+}
