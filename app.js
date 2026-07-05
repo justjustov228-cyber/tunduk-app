@@ -48,6 +48,7 @@ const ICONS = {
   search:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`,
   members: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
   shield:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`,
+  info:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>`,
 };
 
 function injectIcons() {
@@ -64,6 +65,7 @@ function injectIcons() {
   $("createGroupBackBtn").innerHTML   = ICONS.back;
   if ($("membersBtn")) $("membersBtn").innerHTML = ICONS.members;
   if ($("membersBackBtn")) $("membersBackBtn").innerHTML = ICONS.back;
+  $("joinPreviewBackBtn").innerHTML = ICONS.back;
 }
 
 function setStatus(text, online) {
@@ -510,7 +512,7 @@ function buildUserItem(u) {
   return div;
 }
 
-function buildChannelItem(ch) {
+function buildChannelItem(ch, fromSearch = false) {
   const div = document.createElement("div"); div.className = "userItem";
   const av = document.createElement("div"); av.className = "avatar small";
   renderAvatarInto(av, ch.name, ch.avatar);
@@ -519,11 +521,17 @@ function buildChannelItem(ch) {
   const handle = document.createElement("span"); handle.className = "userItemHandle"; handle.textContent = `@${ch.handle}`; txt.appendChild(handle);
   const badge = document.createElement("span"); badge.className = "userItemType"; badge.textContent = "Канал";
   div.appendChild(av); div.appendChild(txt); div.appendChild(badge);
-  div.onclick = () => { closeSearch(); openChannelChat(ch); };
+  // Приватные каналы возвращаются поиском только если пользователь уже участник —
+  // в этом случае превью не нужно, сразу открываем чат. Публичные — показываем превью.
+  div.onclick = () => {
+    closeSearch();
+    if (fromSearch && ch.is_public) openJoinPreview(ch, "channel");
+    else openChannelChat(ch);
+  };
   return div;
 }
 
-function buildGroupItem(gr) {
+function buildGroupItem(gr, fromSearch = false) {
   const div = document.createElement("div"); div.className = "userItem";
   const av = document.createElement("div"); av.className = "avatar small";
   renderAvatarInto(av, gr.name, gr.avatar);
@@ -532,7 +540,11 @@ function buildGroupItem(gr) {
   if (gr.handle) { const handle = document.createElement("span"); handle.className = "userItemHandle"; handle.textContent = `@${gr.handle}`; txt.appendChild(handle); }
   const badge = document.createElement("span"); badge.className = "userItemType"; badge.textContent = "Группа";
   div.appendChild(av); div.appendChild(txt); div.appendChild(badge);
-  div.onclick = () => { closeSearch(); openGroupChat(gr); };
+  div.onclick = () => {
+    closeSearch();
+    if (fromSearch && gr.is_public) openJoinPreview(gr, "group");
+    else openGroupChat(gr);
+  };
   return div;
 }
 
@@ -556,9 +568,9 @@ async function onSearchInput() {
     if (query.startsWith("@")) {
       const handle = query.slice(1).toLowerCase();
       const ch = await fetchChannelByHandle(handle);
-      if (ch) { resultDiv.appendChild(buildChannelItem(ch)); return; }
+      if (ch) { resultDiv.appendChild(buildChannelItem(ch, true)); return; }
       const gr = await fetchGroupByHandle(handle);
-      if (gr) { resultDiv.appendChild(buildGroupItem(gr)); return; }
+      if (gr) { resultDiv.appendChild(buildGroupItem(gr, true)); return; }
       resultDiv.innerHTML = `<div class="searchHint">Не найдено</div>`; return;
     }
     if (query === myUsername) { resultDiv.innerHTML = `<div class="searchHint">Это твой аккаунт</div>`; return; }
@@ -659,6 +671,72 @@ function closeChat() {
   $("chatPanel").classList.remove("active");
   $("usersPanel").classList.remove("hidden");
   renderRecentChats();
+}
+
+// ---- JOIN PREVIEW (публичные каналы/группы, найденные через поиск) ----
+let joinPreviewItem = null;
+let joinPreviewType = null;
+
+function openJoinPreview(item, type) {
+  joinPreviewItem = item;
+  joinPreviewType = type;
+
+  renderAvatarInto($("joinPreviewAvatar"), item.name, item.avatar);
+  $("joinPreviewName").textContent = item.name;
+  $("joinPreviewHandle").textContent = item.handle ? `@${item.handle}` : "";
+  $("joinPreviewHandle").style.display = item.handle ? "block" : "none";
+
+  const kindLabel = type === "channel" ? "канал" : "группа";
+  const memberWord = pluralizeMembers(item.member_count);
+  $("joinPreviewMeta").textContent = `${item.is_public ? "Публичный" : "Приватный"} ${kindLabel} · ${item.member_count} ${memberWord}`;
+
+  $("joinPreviewDesc").textContent = item.description || "";
+  $("joinPreviewDesc").style.display = item.description ? "block" : "none";
+
+  const noteEl = $("joinPreviewNote");
+  noteEl.innerHTML = "";
+  const noteIcon = document.createElement("span");
+  const noteText = document.createElement("span");
+  if (type === "channel") {
+    noteIcon.innerHTML = ICONS.info;
+    noteText.textContent = "Писать в канал могут только владелец и администраторы";
+  } else {
+    noteIcon.innerHTML = ICONS.info;
+    noteText.textContent = "Писать в группу может любой участник";
+  }
+  noteEl.appendChild(noteIcon); noteEl.appendChild(noteText);
+
+  $("joinPreviewTitle").textContent = kindLabel === "канал" ? "Канал" : "Группа";
+  $("joinPreviewBtn").textContent = "Присоединиться";
+  $("joinPreviewBtn").className = "";
+
+  $("usersPanel").classList.add("hidden");
+  $("joinPreviewScreen").classList.add("active");
+}
+
+function closeJoinPreview() {
+  $("joinPreviewScreen").classList.remove("active");
+  $("usersPanel").classList.remove("hidden");
+  joinPreviewItem = null; joinPreviewType = null;
+}
+
+function pluralizeMembers(n) {
+  const mod10 = n % 10, mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return "участник";
+  if ([2, 3, 4].includes(mod10) && ![12, 13, 14].includes(mod100)) return "участника";
+  return "участников";
+}
+
+async function confirmJoinPreview() {
+  if (!joinPreviewItem || !joinPreviewType) return;
+  const btn = $("joinPreviewBtn");
+  btn.disabled = true; btn.textContent = "Открытие...";
+  const item = joinPreviewItem; const type = joinPreviewType;
+  $("joinPreviewScreen").classList.remove("active");
+  joinPreviewItem = null; joinPreviewType = null;
+  btn.disabled = false; btn.textContent = "Присоединиться";
+  if (type === "channel") await openChannelChat(item);
+  else await openGroupChat(item);
 }
 
 // ---- MEMBERS / ADMIN MANAGEMENT ----
@@ -1024,6 +1102,9 @@ $("soundToggleRow").onclick  = toggleSound;
 
 if ($("membersBtn"))     $("membersBtn").onclick     = openMembers;
 if ($("membersBackBtn")) $("membersBackBtn").onclick = closeMembers;
+
+$("joinPreviewBackBtn").onclick = closeJoinPreview;
+$("joinPreviewBtn").onclick     = confirmJoinPreview;
 
 $("fab").onclick        = toggleFab;
 $("fabContact").onclick = () => { closeFab(); openSearch(); };
