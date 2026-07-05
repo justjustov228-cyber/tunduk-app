@@ -402,6 +402,38 @@ body {
 
 .hidden { display: none !important; }
 
+/* ---- Join preview ---- */
+#joinPreviewScreen {
+  display: none;
+  position: absolute;
+  inset: 0;
+  flex-direction: column;
+  background: #15171c;
+  animation: panelIn 0.2s ease-out;
+  z-index: 7;
+}
+#joinPreviewScreen.active { display: flex; }
+#joinPreviewBody {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  padding: 36px 24px; gap: 6px; overflow-y: auto; text-align: center;
+}
+.joinPreviewName { font-size: 19px; font-weight: 700; margin-top: 16px; }
+.joinPreviewHandle { font-size: 13px; color: #e8a23d; }
+.joinPreviewMeta { font-size: 12px; color: #6b6f7a; margin-top: 2px; }
+.joinPreviewDesc { font-size: 14px; color: #cfd0d6; line-height: 1.5; margin-top: 14px; max-width: 320px; }
+.joinPreviewNote {
+  font-size: 12px; color: #6b6f7a; margin-top: 10px; max-width: 320px;
+  display: flex; align-items: center; gap: 6px; justify-content: center;
+}
+.joinPreviewNote svg { width: 14px; height: 14px; flex-shrink: 0; color: #6b6f7a; }
+#joinPreviewBtn {
+  width: 100%; max-width: 300px; padding: 13px; margin-top: 24px;
+  border-radius: 10px; border: none; background: #e8a23d; color: #1a1305;
+  font-size: 15px; font-weight: 600; cursor: pointer;
+}
+#joinPreviewBtn:active { transform: scale(0.97); }
+#joinPreviewBtn.secondary { background: transparent; color: #f0ede4; border: 1px solid #2c2f37; }
+
 /* ---- Members / Admin management ---- */
 #membersScreen {
   display: none;
