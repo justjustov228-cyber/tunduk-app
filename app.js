@@ -1191,6 +1191,13 @@ function connectWebSocket() {
 
 // ---- ЗВОНКИ (WebRTC, аудио 1:1) ----
 const ICE_SERVERS = [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun1.l.google.com:19302" }];
+const CALL_AUDIO_CONSTRAINTS = {
+  audio: {
+    noiseSuppression: true,
+    echoCancellation: true,
+    autoGainControl: true,
+  },
+};
 
 let callPeerConnection = null;
 let localCallStream    = null;
@@ -1262,7 +1269,7 @@ async function startCall(username) {
   callWithUsername = username; callState = "calling";
   showCallUI(username, "calling");
   try {
-    localCallStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    localCallStream = await navigator.mediaDevices.getUserMedia(CALL_AUDIO_CONSTRAINTS);
   } catch {
     alert("Нет доступа к микрофону");
     resetCallState();
@@ -1278,7 +1285,7 @@ async function startCall(username) {
 async function acceptCall() {
   stopRingtone();
   try {
-    localCallStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    localCallStream = await navigator.mediaDevices.getUserMedia(CALL_AUDIO_CONSTRAINTS);
   } catch {
     alert("Нет доступа к микрофону");
     declineCall();
