@@ -54,6 +54,10 @@ const ICONS = {
   trash:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="17" height="17"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>`,
   play:    `<svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><polygon points="6 3 20 12 6 21 6 3"/></svg>`,
   pause:   `<svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>`,
+  phone:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127 1.03.36 2.04.7 3a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.96.34 1.97.57 3 .7A2 2 0 0 1 22 16.92z"/></svg>`,
+  micOff:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`,
+  headphones:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>`,
+  headphonesOff: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`,
 };
 
 function injectIcons() {
@@ -75,6 +79,12 @@ function injectIcons() {
   $("micBtn").innerHTML = ICONS.mic;
   $("cancelRecordingBtn").innerHTML = ICONS.trash;
   $("sendRecordingBtn").innerHTML = ICONS.send;
+  $("callBtn").innerHTML = ICONS.phone;
+  $("callAcceptBtn").innerHTML = ICONS.phone;
+  $("callDeclineBtn").innerHTML = ICONS.phone;
+  $("callHangupBtn").innerHTML = ICONS.phone;
+  $("callMuteBtn").innerHTML = ICONS.mic;
+  $("callDeafenBtn").innerHTML = ICONS.headphones;
 }
 
 function setStatus(text, online) {
@@ -624,6 +634,7 @@ async function openUserChat(username) {
   $("chatPanel").classList.add("active");
   $("inputBar").classList.remove("readonly");
   if ($("membersBtn")) $("membersBtn").classList.add("hidden");
+  $("callBtn").classList.remove("hidden");
   const profile = await fetchUserProfile(username);
   renderAvatarInto($("chatAvatarSmall"), username, profile ? profile.avatar : "");
   addRecentChat(username, "user");
@@ -649,6 +660,7 @@ async function openChannelChat(ch) {
   $("chatPanel").classList.add("active");
   currentChatIsAdmin ? $("inputBar").classList.remove("readonly") : $("inputBar").classList.add("readonly");
   if ($("membersBtn")) $("membersBtn").classList.remove("hidden");
+  $("callBtn").classList.add("hidden");
   renderAvatarInto($("chatAvatarSmall"), ch.name, ch.avatar);
   addRecentChat(ch.id, "channel");
   await loadChannelHistory(ch.id);
@@ -673,6 +685,7 @@ async function openGroupChat(gr) {
   $("chatPanel").classList.add("active");
   $("inputBar").classList.remove("readonly");
   if ($("membersBtn")) $("membersBtn").classList.remove("hidden");
+  $("callBtn").classList.add("hidden");
   renderAvatarInto($("chatAvatarSmall"), gr.name, gr.avatar);
   addRecentChat(gr.id, "group");
   await loadGroupHistory(gr.id);
@@ -1170,7 +1183,214 @@ function connectWebSocket() {
       messageCache[key].push(entry);
       if (currentChatType === "user" && currentChatWith === other) addMessageBubble(entry);
     }
+    if (["call_offer", "call_answer", "call_ice", "call_end", "call_reject", "call_busy", "call_unavailable"].includes(data.type)) {
+      handleCallSignal(data);
+    }
   };
+}
+
+// ---- ЗВОНКИ (WebRTC, аудио 1:1) ----
+const ICE_SERVERS = [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun1.l.google.com:19302" }];
+
+let callPeerConnection = null;
+let localCallStream    = null;
+let remoteCallAudioEl  = null;
+let callState          = "idle"; // idle | calling | ringing | connecting | connected
+let callWithUsername   = null;
+let pendingOfferSdp    = null;
+let callMuted          = false;
+let callDeafened       = false;
+let callTimerInterval  = null;
+let callStartTime      = null;
+let ringtoneInterval   = null;
+
+function formatCallDuration(totalSeconds) {
+  totalSeconds = Math.max(0, Math.round(totalSeconds));
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  const mm = h > 0 ? String(m).padStart(2, "0") : String(m);
+  return h > 0 ? `${h}:${mm}:${String(s).padStart(2, "0")}` : `${mm}:${String(s).padStart(2, "0")}`;
+}
+
+function createCallPeerConnection() {
+  const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+  pc.onicecandidate = e => {
+    if (e.candidate && callWithUsername) {
+      ws.send(JSON.stringify({ type: "call_ice", target: callWithUsername, candidate: e.candidate }));
+    }
+  };
+  pc.ontrack = e => {
+    if (!remoteCallAudioEl) { remoteCallAudioEl = new Audio(); remoteCallAudioEl.autoplay = true; }
+    remoteCallAudioEl.muted = callDeafened;
+    remoteCallAudioEl.srcObject = e.streams[0];
+  };
+  pc.onconnectionstatechange = () => {
+    if (pc.connectionState === "connected" && callState !== "connected") {
+      callState = "connected";
+      stopRingtone();
+      startCallTimer();
+      showCallUI(callWithUsername, "connected");
+    }
+    if (["failed", "disconnected", "closed"].includes(pc.connectionState) && callState !== "idle") {
+      endCallLocally();
+    }
+  };
+  return pc;
+}
+
+function showCallUI(username, mode) {
+  $("callScreen").classList.add("active");
+  $("callScreen").classList.toggle("ringing", mode === "ringing");
+  renderAvatarInto($("callAvatar"), username, (userProfileCache[username] || {}).avatar || "");
+  $("callUserName").textContent = username;
+  $("callTimer").classList.add("hidden");
+  $("callIncomingActions").classList.add("hidden");
+  $("callActiveActions").classList.add("hidden");
+
+  if (mode === "calling")    { $("callStatus").textContent = "Звонок..."; $("callActiveActions").classList.remove("hidden"); }
+  if (mode === "ringing")    { $("callStatus").textContent = "Входящий звонок"; $("callIncomingActions").classList.remove("hidden"); }
+  if (mode === "connecting") { $("callStatus").textContent = "Соединение..."; $("callActiveActions").classList.remove("hidden"); }
+  if (mode === "connected")  { $("callStatus").textContent = "На связи"; $("callTimer").classList.remove("hidden"); $("callActiveActions").classList.remove("hidden"); }
+}
+
+function setCallStatusText(text) { $("callStatus").textContent = text; }
+
+async function startCall(username) {
+  if (callState !== "idle") { alert("Уже есть активный звонок"); return; }
+  if (!ws || ws.readyState !== WebSocket.OPEN) { alert("Нет соединения"); return; }
+  callWithUsername = username; callState = "calling";
+  showCallUI(username, "calling");
+  try {
+    localCallStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch {
+    alert("Нет доступа к микрофону");
+    resetCallState();
+    return;
+  }
+  callPeerConnection = createCallPeerConnection();
+  localCallStream.getTracks().forEach(t => callPeerConnection.addTrack(t, localCallStream));
+  const offer = await callPeerConnection.createOffer();
+  await callPeerConnection.setLocalDescription(offer);
+  ws.send(JSON.stringify({ type: "call_offer", target: username, sdp: offer }));
+}
+
+async function acceptCall() {
+  stopRingtone();
+  try {
+    localCallStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch {
+    alert("Нет доступа к микрофону");
+    declineCall();
+    return;
+  }
+  callState = "connecting";
+  showCallUI(callWithUsername, "connecting");
+  callPeerConnection = createCallPeerConnection();
+  localCallStream.getTracks().forEach(t => callPeerConnection.addTrack(t, localCallStream));
+  await callPeerConnection.setRemoteDescription(new RTCSessionDescription(pendingOfferSdp));
+  const answer = await callPeerConnection.createAnswer();
+  await callPeerConnection.setLocalDescription(answer);
+  ws.send(JSON.stringify({ type: "call_answer", target: callWithUsername, sdp: answer }));
+}
+
+function declineCall() {
+  if (callWithUsername) ws.send(JSON.stringify({ type: "call_reject", target: callWithUsername }));
+  resetCallState();
+}
+
+function hangupCall() {
+  if (callWithUsername) ws.send(JSON.stringify({ type: "call_end", target: callWithUsername }));
+  resetCallState();
+}
+
+function endCallLocally() {
+  setCallStatusText("Звонок завершён");
+  stopRingtone();
+  setTimeout(resetCallState, 900);
+}
+
+function resetCallState() {
+  stopRingtone();
+  clearInterval(callTimerInterval);
+  if (callPeerConnection) { try { callPeerConnection.close(); } catch {} callPeerConnection = null; }
+  if (localCallStream) { localCallStream.getTracks().forEach(t => t.stop()); localCallStream = null; }
+  if (remoteCallAudioEl) { remoteCallAudioEl.srcObject = null; }
+  callState = "idle"; callWithUsername = null; pendingOfferSdp = null; callMuted = false; callDeafened = false;
+  $("callMuteBtn").classList.remove("active"); $("callMuteBtn").innerHTML = ICONS.mic;
+  $("callDeafenBtn").classList.remove("active"); $("callDeafenBtn").innerHTML = ICONS.headphones;
+  $("callScreen").classList.remove("active", "ringing");
+}
+
+function startCallTimer() {
+  callStartTime = Date.now();
+  $("callTimer").textContent = "0:00";
+  callTimerInterval = setInterval(() => {
+    $("callTimer").textContent = formatCallDuration((Date.now() - callStartTime) / 1000);
+  }, 1000);
+}
+
+function toggleCallMute() {
+  if (!localCallStream) return;
+  callMuted = !callMuted;
+  localCallStream.getAudioTracks().forEach(t => { t.enabled = !callMuted; });
+  $("callMuteBtn").classList.toggle("active", callMuted);
+  $("callMuteBtn").innerHTML = callMuted ? ICONS.micOff : ICONS.mic;
+}
+
+function toggleCallDeafen() {
+  callDeafened = !callDeafened;
+  if (remoteCallAudioEl) remoteCallAudioEl.muted = callDeafened;
+  $("callDeafenBtn").classList.toggle("active", callDeafened);
+  $("callDeafenBtn").innerHTML = callDeafened ? ICONS.headphonesOff : ICONS.headphones;
+}
+
+function playCallBeep() {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    osc.frequency.value = 660; osc.type = "sine";
+    gain.gain.setValueAtTime(0.18, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
+    osc.start(); osc.stop(audioCtx.currentTime + 0.4);
+  } catch {}
+}
+
+function startRingtone() {
+  stopRingtone();
+  playCallBeep();
+  ringtoneInterval = setInterval(playCallBeep, 1600);
+  if (navigator.vibrate) navigator.vibrate([400, 200, 400, 200]);
+}
+
+function stopRingtone() {
+  clearInterval(ringtoneInterval); ringtoneInterval = null;
+  if (navigator.vibrate) navigator.vibrate(0);
+}
+
+async function handleCallSignal(data) {
+  if (data.type === "call_offer") {
+    if (callState !== "idle") { ws.send(JSON.stringify({ type: "call_reject", target: data.from })); return; }
+    callWithUsername = data.from; callState = "ringing"; pendingOfferSdp = data.sdp;
+    showCallUI(data.from, "ringing");
+    startRingtone();
+    return;
+  }
+  if (data.type === "call_answer") {
+    if (callPeerConnection) await callPeerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
+    return;
+  }
+  if (data.type === "call_ice") {
+    if (callPeerConnection && data.candidate) {
+      try { await callPeerConnection.addIceCandidate(new RTCIceCandidate(data.candidate)); } catch {}
+    }
+    return;
+  }
+  if (data.type === "call_reject") { setCallStatusText("Звонок отклонён"); stopRingtone(); setTimeout(resetCallState, 1200); return; }
+  if (data.type === "call_busy") { setCallStatusText("Собеседник занят"); stopRingtone(); setTimeout(resetCallState, 1200); return; }
+  if (data.type === "call_unavailable") { setCallStatusText("Пользователь не в сети"); stopRingtone(); setTimeout(resetCallState, 1200); return; }
+  if (data.type === "call_end") { endCallLocally(); return; }
 }
 
 // ---- SETTINGS ----
@@ -1313,6 +1533,13 @@ $("chatImageInput").addEventListener("change", onChatImageChosen);
 $("micBtn").onclick            = startVoiceRecording;
 $("cancelRecordingBtn").onclick = () => stopVoiceRecording(false);
 $("sendRecordingBtn").onclick   = () => stopVoiceRecording(true);
+
+$("callBtn").onclick        = () => { if (currentChatType === "user" && currentChatWith) startCall(currentChatWith); };
+$("callAcceptBtn").onclick  = acceptCall;
+$("callDeclineBtn").onclick = declineCall;
+$("callHangupBtn").onclick  = hangupCall;
+$("callMuteBtn").onclick    = toggleCallMute;
+$("callDeafenBtn").onclick  = toggleCallDeafen;
 $("searchBtn").onclick     = openSearch;
 $("searchBackBtn").onclick = closeSearch;
 $("searchInput").addEventListener("input", onSearchInput);
