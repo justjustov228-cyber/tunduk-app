@@ -121,7 +121,8 @@
         <strong id="chatWithLabel"></strong>  
         <span id="chatSubLabel"></span>  
       </div>  
-      <button id="membersBtn" class="hidden" style="margin-left:auto;"></button>  
+      <button id="callBtn" class="hidden" style="margin-left:auto;"></button>  
+      <button id="membersBtn" class="hidden"></button>  
     </div>  
     <div id="messages"></div>  
     <div id="inputBar">  
@@ -318,7 +319,37 @@
     </div>  
   </div>  
 
+  <!-- Call screen (звонки, оформление в стиле Discord) -->  
+  <div id="callScreen">  
+    <div id="callTopInfo">  
+      <div id="callStatus">Звонок...</div>  
+    </div>  
+    <div id="callCenter">  
+      <div id="callAvatarWrap">  
+        <div class="callPulseRing"></div>  
+        <div class="avatar" id="callAvatar"></div>  
+      </div>  
+      <div id="callUserName"></div>  
+      <div id="callTimer" class="hidden">0:00</div>  
+    </div>  
+    <div id="callIncomingActions" class="hidden">  
+      <div class="callActionCol">  
+        <button id="callDeclineBtn" class="callActionBtn decline"></button>  
+        <span>Отклонить</span>  
+      </div>  
+      <div class="callActionCol">  
+        <button id="callAcceptBtn" class="callActionBtn accept"></button>  
+        <span>Принять</span>  
+      </div>  
+    </div>  
+    <div id="callActiveActions" class="hidden">  
+      <button id="callMuteBtn" class="callControlBtn"></button>  
+      <button id="callHangupBtn" class="callControlBtn hangup"></button>  
+      <button id="callDeafenBtn" class="callControlBtn"></button>  
+    </div>  
+  </div>  
+
 </div>
 
   </div>    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>    <script src="app.js"></script>  </body>  
-                                                                                                                                                                                                                                                                                             </html>
+          </html>
