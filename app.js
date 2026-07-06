@@ -1191,13 +1191,6 @@ function connectWebSocket() {
 
 // ---- ЗВОНКИ (WebRTC, аудио 1:1) ----
 const ICE_SERVERS = [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun1.l.google.com:19302" }];
-const CALL_AUDIO_CONSTRAINTS = {
-  audio: {
-    noiseSuppression: true,
-    echoCancellation: true,
-    autoGainControl: true,
-  },
-};
 
 let callPeerConnection = null;
 let localCallStream    = null;
@@ -1261,6 +1254,38 @@ function showCallUI(username, mode) {
   if (mode === "connected")  { $("callStatus").textContent = "На связи"; $("callTimer").classList.remove("hidden"); $("callActiveActions").classList.remove("hidden"); }
 }
 
+// ---- НАСТРОЙКИ АУДИО ДЛЯ ЗВОНКОВ ----
+// Встроенное в браузер шумоподавление WebRTC. Пробуем максимально агрессивные
+// нативные constraints, с откатом на базовые если браузер их не поддерживает.
+const CALL_AUDIO_CONSTRAINTS_STRONG = {
+  audio: {
+    echoCancellation: true,
+    noiseSuppression: true,
+    autoGainControl: true,
+    googNoiseSuppression: true,
+    googEchoCancellation: true,
+    googAutoGainControl: true,
+    googHighpassFilter: true,
+    googTypingNoiseDetection: true,
+  },
+};
+const CALL_AUDIO_CONSTRAINTS_BASIC = {
+  audio: {
+    echoCancellation: true,
+    noiseSuppression: true,
+    autoGainControl: true,
+  },
+};
+
+async function getCallMicStream() {
+  try {
+    return await navigator.mediaDevices.getUserMedia(CALL_AUDIO_CONSTRAINTS_STRONG);
+  } catch {
+    // Браузер не принял расширенные googXxx-constraints — откатываемся на базовые
+    return await navigator.mediaDevices.getUserMedia(CALL_AUDIO_CONSTRAINTS_BASIC);
+  }
+}
+
 function setCallStatusText(text) { $("callStatus").textContent = text; }
 
 async function startCall(username) {
@@ -1269,7 +1294,7 @@ async function startCall(username) {
   callWithUsername = username; callState = "calling";
   showCallUI(username, "calling");
   try {
-    localCallStream = await navigator.mediaDevices.getUserMedia(CALL_AUDIO_CONSTRAINTS);
+    localCallStream = await getCallMicStream();
   } catch {
     alert("Нет доступа к микрофону");
     resetCallState();
@@ -1285,7 +1310,7 @@ async function startCall(username) {
 async function acceptCall() {
   stopRingtone();
   try {
-    localCallStream = await navigator.mediaDevices.getUserMedia(CALL_AUDIO_CONSTRAINTS);
+    localCallStream = await getCallMicStream();
   } catch {
     alert("Нет доступа к микрофону");
     declineCall();
