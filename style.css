@@ -568,9 +568,77 @@ body {
   position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
   font-size: 12px; font-weight: 600; pointer-events: none;
 }
-.usernameStatus.checking { color: #8b8f99; }
-.usernameStatus.available { color: #5fb86e; }
-.usernameStatus.taken { color: #d9694f; }
+/* =========================================================
+   ЗВОНКИ — отдельная тема в стиле Discord (только этот экран)
+========================================================= */
+#callScreen {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(180deg, #232428 0%, #1e1f22 100%);
+  color: #f2f3f5;
+  padding: 48px 24px 40px;
+  animation: fadeIn 0.22s ease;
+}
+#callScreen.active { display: flex; }
+
+#callTopInfo { text-align: center; }
+#callStatus { font-size: 14px; color: #949ba4; letter-spacing: 0.02em; }
+
+#callCenter { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+#callAvatarWrap { position: relative; width: 132px; height: 132px; display: flex; align-items: center; justify-content: center; }
+#callAvatar {
+  width: 128px; height: 128px; font-size: 46px;
+  border: 3px solid #2b2d31;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.4);
+}
+.callPulseRing {
+  position: absolute; inset: 0; border-radius: 50%;
+  border: 2px solid #3ba55d;
+  opacity: 0; display: none;
+}
+#callScreen.ringing .callPulseRing { display: block; animation: callPulse 1.6s ease-out infinite; }
+@keyframes callPulse {
+  0%   { transform: scale(1);   opacity: 0.55; }
+  100% { transform: scale(1.35); opacity: 0; }
+}
+#callUserName { font-size: 21px; font-weight: 700; }
+#callTimer { font-size: 14px; color: #949ba4; font-variant-numeric: tabular-nums; }
+
+/* Входящий звонок: принять / отклонить */
+#callIncomingActions { display: flex; gap: 56px; padding-bottom: 8px; }
+.callActionCol { display: flex; flex-direction: column; align-items: center; gap: 9px; }
+.callActionCol span { font-size: 12px; color: #949ba4; }
+.callActionBtn {
+  width: 62px; height: 62px; border-radius: 50%; border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: transform 0.12s ease, filter 0.12s ease;
+}
+.callActionBtn:active { transform: scale(0.93); }
+.callActionBtn svg { width: 24px; height: 24px; color: #fff; }
+.callActionBtn.accept { background: #23a55a; }
+.callActionBtn.accept:active { filter: brightness(1.1); }
+.callActionBtn.decline { background: #ed4245; }
+.callActionBtn.decline svg { transform: rotate(135deg); }
+
+/* Активный звонок: mute / hangup / deafen */
+#callActiveActions { display: flex; align-items: center; gap: 22px; padding-bottom: 8px; }
+.callControlBtn {
+  width: 54px; height: 54px; border-radius: 50%; border: none; cursor: pointer;
+  background: #383a40; color: #f2f3f5;
+  display: flex; align-items: center; justify-content: center;
+  transition: transform 0.12s ease, background 0.15s ease;
+}
+.callControlBtn:active { transform: scale(0.93); }
+.callControlBtn svg { width: 20px; height: 20px; }
+.callControlBtn.active { background: #f2f3f5; color: #1e1f22; }
+.callControlBtn.hangup { width: 62px; height: 62px; background: #ed4245; }
+.callControlBtn.hangup svg { width: 24px; height: 24px; transform: rotate(135deg); }
+.callControlBtn.hangup:active { filter: brightness(1.1); }
 /* =========================
    TUNDUK - ANIMATIONS CORE
 ========================= */
@@ -701,4 +769,4 @@ input:focus, textarea:focus {
 .screen.switch-in {
   opacity: 1;
   transform: translateX(0);
-}
+  }
