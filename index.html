@@ -10,7 +10,7 @@
       <img src="logo.png" alt="Tunduk" width="100" height="100" style="border-radius: 22px;">  
     </div>  
     <div class="wordmark">tun<span class="light">duk</span></div>  
-    <p class="subtitle">тундук — окно к миру</p>  <!-- Экран 1: логин или начало регистрации -->  
+    <p class="subtitle">Тундук — окно к миру</p>  <!-- Экран 1: логин или начало регистрации -->  
 <div id="authChoice">  
   <button id="showLoginBtn">Войти</button>  
   <button id="showRegisterBtn" class="secondary">Зарегистрироваться</button>  
@@ -121,6 +121,7 @@
         <strong id="chatWithLabel"></strong>  
         <span id="chatSubLabel"></span>  
       </div>  
+      <span id="chatEncryptedBadge" class="hidden" title="Сквозное шифрование"></span>  
       <button id="callBtn" class="hidden" style="margin-left:auto;"></button>  
       <button id="membersBtn" class="hidden"></button>  
     </div>  
@@ -410,5 +411,10 @@
 
 </div>
 
-  </div>    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>    <script src="app.js"></script>  </body>  
-              </html>
+  </div>    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>    
+  <script type="module">
+    import sodium from "https://cdn.jsdelivr.net/npm/libsodium-wrappers@0.7.15/+esm";
+    window.sodiumReady = sodium.ready.then(() => { window.sodium = sodium; return sodium; });
+  </script>
+  <script src="app.js"></script>  </body>  
+      </html>
