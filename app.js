@@ -11,6 +11,8 @@ let myUsername   = localStorage.getItem("tunduk_username") || null;
 let myUserId     = null;
 let myBio        = "";
 let myAvatar     = "";
+let myFirstName  = "";
+let myLastName   = "";
 let ws           = null;
 let currentChatWith   = null;
 let currentChatType   = "user";
@@ -58,6 +60,9 @@ const ICONS = {
   micOff:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`,
   headphones:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>`,
   headphonesOff: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`,
+  plus:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
+  close:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
+  sticker: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="19" height="19"><path d="M15 3H7a4 4 0 0 0-4 4v10a4 4 0 0 0 4 4h8a4 4 0 0 0 4-4v-6"/><path d="M15 3l6 6h-4a2 2 0 0 1-2-2z"/><circle cx="9" cy="10" r="1"/><circle cx="14" cy="10" r="1"/><path d="M8.5 14.5c1 1 5 1 6 0"/></svg>`,
 };
 
 function injectIcons() {
@@ -85,6 +90,12 @@ function injectIcons() {
   $("callHangupBtn").innerHTML = ICONS.phone;
   $("callMuteBtn").innerHTML = ICONS.mic;
   $("callDeafenBtn").innerHTML = ICONS.headphones;
+  $("stickerBtn").innerHTML = ICONS.sticker;
+  $("stickersBackBtn").innerHTML = ICONS.back;
+  $("createPackBtn").innerHTML = ICONS.plus;
+  $("stickerPackBackBtn").innerHTML = ICONS.back;
+  $("deletePackBtn").innerHTML = ICONS.trash;
+  $("stickerPickerBackBtn").innerHTML = ICONS.back;
 }
 
 function setStatus(text, online) {
@@ -353,7 +364,7 @@ async function performLogin(email, username, password, errEl) {
 
 function logout() {
   if (ws) { ws.close(); ws = null; }
-  token = null; myUsername = null; myBio = ""; myAvatar = "";
+  token = null; myUsername = null; myBio = ""; myAvatar = ""; myFirstName = ""; myLastName = "";
   localStorage.removeItem("tunduk_token");
   localStorage.removeItem("tunduk_username");
   messageCache = {}; userProfileCache = {};
@@ -370,11 +381,16 @@ async function loadMyId() {
     if (res.status === 401) { logout(); return; }
     const me = await res.json();
     myUserId = me.id; myBio = me.bio || ""; myAvatar = me.avatar || "";
+    myFirstName = me.first_name || ""; myLastName = me.last_name || "";
     updateMyAvatarUI();
   } catch (e) { console.error(e); }
 }
 
 function openMyProfile() {
+  $("profileFullNameDisplay").textContent = [myFirstName, myLastName].filter(Boolean).join(" ") || myUsername;
+  $("profileHandleDisplay").textContent = `@${myUsername}`;
+  $("profileFirstNameInput").value = myFirstName;
+  $("profileLastNameInput").value  = myLastName;
   $("profileUsernameInput").value = myUsername;
   $("profileBioInput").value      = myBio;
   renderAvatarInto($("profileAvatarBig"), myUsername, myAvatar);
@@ -385,16 +401,27 @@ function openMyProfile() {
 function closeProfile() { $("profileScreen").classList.remove("active"); }
 
 async function saveProfile() {
-  const newUsername = $("profileUsernameInput").value.trim();
-  const newBio      = $("profileBioInput").value.trim();
+  const newUsername  = $("profileUsernameInput").value.trim();
+  const newFirstName = $("profileFirstNameInput").value.trim();
+  const newLastName  = $("profileLastNameInput").value.trim();
+  const newBio       = $("profileBioInput").value.trim();
+  if (!newFirstName) { $("profileMsg").style.color = "#f44336"; $("profileMsg").textContent = "Укажи имя"; return; }
+  if (!newLastName)  { $("profileMsg").style.color = "#f44336"; $("profileMsg").textContent = "Укажи фамилию"; return; }
   $("profileMsg").style.color = "#4caf50"; $("profileMsg").textContent = "Сохранение...";
   try {
-    const res  = await fetch(`${API_BASE}/me`, { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ username: newUsername, bio: newBio }) });
+    const res  = await fetch(`${API_BASE}/me`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ username: newUsername, first_name: newFirstName, last_name: newLastName, bio: newBio }),
+    });
     const data = await res.json();
     if (!res.ok) { $("profileMsg").style.color = "#f44336"; $("profileMsg").textContent = data.detail || "Ошибка"; return; }
     myUsername = data.username; myBio = data.bio || ""; myAvatar = data.avatar || "";
+    myFirstName = data.first_name || ""; myLastName = data.last_name || "";
     localStorage.setItem("tunduk_username", myUsername);
     $("meLabel").textContent = myUsername;
+    $("profileFullNameDisplay").textContent = [myFirstName, myLastName].filter(Boolean).join(" ") || myUsername;
+    $("profileHandleDisplay").textContent = `@${myUsername}`;
     updateMyAvatarUI();
     $("profileMsg").style.color = "#4caf50"; $("profileMsg").textContent = "Сохранено";
   } catch { $("profileMsg").style.color = "#f44336"; $("profileMsg").textContent = "Сервер не отвечает"; }
@@ -958,6 +985,10 @@ function addMessageBubble(m) {
     const durLabel = formatDuration(m.duration || 0);
     div.innerHTML = `${nameHtml}<button class="voicePlayBtn" type="button">${ICONS.play}</button><div class="voiceBody"><div class="voiceTrack"><div class="voiceProgress"></div></div><div class="voiceMeta"><span class="voiceTimeLabel">${durLabel}</span><span>${time}${tick}</span></div></div>`;
     setupVoiceBubble(div, m.media_data, m.duration || 0);
+  } else if (type === "sticker") {
+    div.className = "msg sticker " + (mine ? "mine" : "theirs");
+    div.innerHTML = `${nameHtml}<img src="${m.media_data}" alt=""><div class="meta">${time}${tick}</div>`;
+    div.querySelector("img").onclick = () => openStickerAddChooser(m.media_data);
   } else {
     div.className = "msg " + (mine ? "mine" : "theirs");
     div.innerHTML = `${nameHtml}${escapeHtml(m.content)}<div class="meta">${time}${tick}</div>`;
@@ -1170,7 +1201,7 @@ function connectWebSocket() {
         addMessageBubble(entry);
       } else {
         // Чат не открыт прямо сейчас — показываем уведомление и обновляем список
-        const preview = data.message_type === "image" ? "Фото" : data.message_type === "voice" ? "Голосовое сообщение" : data.content;
+        const preview = data.message_type === "image" ? "Фото" : data.message_type === "voice" ? "Голосовое сообщение" : data.message_type === "sticker" ? "Стикер" : data.content;
         showIncomingNotification(other, preview);
         renderRecentChats();
       }
@@ -1191,6 +1222,13 @@ function connectWebSocket() {
 
 // ---- ЗВОНКИ (WebRTC, аудио 1:1) ----
 const ICE_SERVERS = [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun1.l.google.com:19302" }];
+const CALL_AUDIO_CONSTRAINTS = {
+  audio: {
+    noiseSuppression: true,
+    echoCancellation: true,
+    autoGainControl: true,
+  },
+};
 
 let callPeerConnection = null;
 let localCallStream    = null;
@@ -1254,38 +1292,6 @@ function showCallUI(username, mode) {
   if (mode === "connected")  { $("callStatus").textContent = "На связи"; $("callTimer").classList.remove("hidden"); $("callActiveActions").classList.remove("hidden"); }
 }
 
-// ---- НАСТРОЙКИ АУДИО ДЛЯ ЗВОНКОВ ----
-// Встроенное в браузер шумоподавление WebRTC. Пробуем максимально агрессивные
-// нативные constraints, с откатом на базовые если браузер их не поддерживает.
-const CALL_AUDIO_CONSTRAINTS_STRONG = {
-  audio: {
-    echoCancellation: true,
-    noiseSuppression: true,
-    autoGainControl: true,
-    googNoiseSuppression: true,
-    googEchoCancellation: true,
-    googAutoGainControl: true,
-    googHighpassFilter: true,
-    googTypingNoiseDetection: true,
-  },
-};
-const CALL_AUDIO_CONSTRAINTS_BASIC = {
-  audio: {
-    echoCancellation: true,
-    noiseSuppression: true,
-    autoGainControl: true,
-  },
-};
-
-async function getCallMicStream() {
-  try {
-    return await navigator.mediaDevices.getUserMedia(CALL_AUDIO_CONSTRAINTS_STRONG);
-  } catch {
-    // Браузер не принял расширенные googXxx-constraints — откатываемся на базовые
-    return await navigator.mediaDevices.getUserMedia(CALL_AUDIO_CONSTRAINTS_BASIC);
-  }
-}
-
 function setCallStatusText(text) { $("callStatus").textContent = text; }
 
 async function startCall(username) {
@@ -1294,7 +1300,7 @@ async function startCall(username) {
   callWithUsername = username; callState = "calling";
   showCallUI(username, "calling");
   try {
-    localCallStream = await getCallMicStream();
+    localCallStream = await navigator.mediaDevices.getUserMedia(CALL_AUDIO_CONSTRAINTS);
   } catch {
     alert("Нет доступа к микрофону");
     resetCallState();
@@ -1310,7 +1316,7 @@ async function startCall(username) {
 async function acceptCall() {
   stopRingtone();
   try {
-    localCallStream = await getCallMicStream();
+    localCallStream = await navigator.mediaDevices.getUserMedia(CALL_AUDIO_CONSTRAINTS);
   } catch {
     alert("Нет доступа к микрофону");
     declineCall();
@@ -1448,6 +1454,242 @@ function applyWallpaper() {
   else { el.style.backgroundImage = wp.css.startsWith("linear") || wp.css.startsWith("radial") ? wp.css : "none"; el.style.backgroundColor = wp.css.startsWith("#") ? wp.css : "#121317"; }
 }
 
+// ---- СТИКЕРЫ: API ----
+let myStickerPacksCache = null;
+
+async function fetchMyStickerPacks(force = false) {
+  if (myStickerPacksCache && !force) return myStickerPacksCache;
+  try {
+    const res = await fetch(`${API_BASE}/stickers/packs`, { headers: { Authorization: `Bearer ${token}` } });
+    myStickerPacksCache = res.ok ? await res.json() : [];
+  } catch { myStickerPacksCache = []; }
+  return myStickerPacksCache;
+}
+
+async function fetchStickerPack(packId) {
+  const packs = await fetchMyStickerPacks(true);
+  return packs.find(p => p.id === packId) || null;
+}
+
+// ---- СТИКЕРЫ: экран "Стикерпаки" (список) ----
+function openStickersScreen() {
+  $("createPackForm").classList.add("hidden");
+  $("newPackNameInput").value = "";
+  $("stickersScreen").classList.add("active");
+  renderStickerPacksList();
+}
+function closeStickersScreen() { $("stickersScreen").classList.remove("active"); }
+
+function toggleCreatePackForm() {
+  $("createPackForm").classList.toggle("hidden");
+  if (!$("createPackForm").classList.contains("hidden")) $("newPackNameInput").focus();
+}
+
+async function renderStickerPacksList() {
+  const listEl = $("stickerPacksList");
+  listEl.innerHTML = `<div style="text-align:center;color:#6b6f7a;padding:20px;font-size:13px;">Загрузка...</div>`;
+  const packs = await fetchMyStickerPacks(true);
+  listEl.innerHTML = "";
+  if (packs.length === 0) {
+    listEl.innerHTML = `<div style="text-align:center;color:#6b6f7a;padding:30px 24px;font-size:13px;line-height:1.5;">У тебя пока нет стикерпаков. Нажми «+» вверху, чтобы создать первый.</div>`;
+    return;
+  }
+  packs.forEach(pack => listEl.appendChild(buildPackRow(pack)));
+}
+
+function buildPackRow(pack) {
+  const row = document.createElement("div");
+  row.className = "packRow";
+  const icon = document.createElement("div"); icon.className = "packRowIcon";
+  if (pack.stickers && pack.stickers[0]) icon.innerHTML = `<img src="${pack.stickers[0].image_data}" alt="">`;
+  else icon.innerHTML = ICONS.sticker;
+  const info = document.createElement("div"); info.className = "packRowInfo";
+  const name = document.createElement("span"); name.textContent = pack.name;
+  const count = document.createElement("span"); count.className = "packRowCount"; count.textContent = `${pack.sticker_count}/10`;
+  info.appendChild(name); info.appendChild(count);
+  const delBtn = document.createElement("button"); delBtn.className = "packRowDelete"; delBtn.innerHTML = ICONS.trash;
+  delBtn.onclick = e => { e.stopPropagation(); deleteStickerPackConfirm(pack); };
+  row.appendChild(icon); row.appendChild(info); row.appendChild(delBtn);
+  row.onclick = () => openStickerPackScreen(pack.id);
+  return row;
+}
+
+async function createStickerPack() {
+  const name = $("newPackNameInput").value.trim();
+  if (!name) return;
+  try {
+    const res = await fetch(`${API_BASE}/stickers/packs`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ name }) });
+    const data = await res.json();
+    if (!res.ok) { alert(data.detail || "Ошибка"); return; }
+    $("createPackForm").classList.add("hidden");
+    $("newPackNameInput").value = "";
+    await renderStickerPacksList();
+  } catch { alert("Сервер не отвечает"); }
+}
+
+function deleteStickerPackConfirm(pack) {
+  if (!confirm(`Удалить стикерпак «${pack.name}» вместе со всеми стикерами?`)) return;
+  deleteStickerPack(pack.id);
+}
+
+async function deleteStickerPack(packId) {
+  try {
+    await fetch(`${API_BASE}/stickers/packs/${packId}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+    await renderStickerPacksList();
+  } catch { alert("Сервер не отвечает"); }
+}
+
+// ---- СТИКЕРЫ: экран одного пака ----
+let currentStickerPackId = null;
+
+async function openStickerPackScreen(packId) {
+  currentStickerPackId = packId;
+  $("stickerPackScreen").classList.add("active");
+  await renderStickerPackScreen();
+}
+function closeStickerPackScreen() { $("stickerPackScreen").classList.remove("active"); currentStickerPackId = null; }
+
+async function renderStickerPackScreen() {
+  const pack = await fetchStickerPack(currentStickerPackId);
+  if (!pack) { closeStickerPackScreen(); return; }
+  $("stickerPackTitle").textContent = pack.name;
+  $("stickerPackCount").textContent = `${pack.sticker_count}/10 стикеров`;
+  const grid = $("stickerGrid");
+  grid.innerHTML = "";
+  pack.stickers.forEach(st => {
+    const tile = document.createElement("div"); tile.className = "stickerTile";
+    tile.innerHTML = `<img src="${st.image_data}" alt="">`;
+    const delBtn = document.createElement("button"); delBtn.className = "stickerTileDelete"; delBtn.innerHTML = ICONS.close;
+    delBtn.onclick = () => deleteStickerFromPack(st.id);
+    tile.appendChild(delBtn);
+    grid.appendChild(tile);
+  });
+  const addTile = document.createElement("button");
+  addTile.className = "stickerTile stickerAddTile" + (pack.sticker_count >= 10 ? " disabled" : "");
+  addTile.innerHTML = ICONS.plus;
+  addTile.onclick = pickStickerImageFile;
+  grid.appendChild(addTile);
+}
+
+function pickStickerImageFile() { $("stickerFileInput").click(); }
+
+function onStickerFileChosen(e) {
+  const file = e.target.files[0]; if (!file) return;
+  e.target.value = "";
+  resizeStickerImage(file, dataUrl => uploadSticker(dataUrl));
+}
+
+function resizeStickerImage(file, callback, maxSize = 512) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = new Image();
+    img.onload = () => {
+      let { width, height } = img;
+      if (width > height) { if (width > maxSize) { height = Math.round(height * maxSize / width); width = maxSize; } }
+      else { if (height > maxSize) { width = Math.round(width * maxSize / height); height = maxSize; } }
+      const canvas = document.createElement("canvas");
+      canvas.width = width; canvas.height = height;
+      canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+      callback(canvas.toDataURL("image/png")); // PNG сохраняет прозрачность
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+async function uploadSticker(dataUrl) {
+  try {
+    const res = await fetch(`${API_BASE}/stickers/packs/${currentStickerPackId}/stickers`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ image_data: dataUrl }) });
+    const data = await res.json();
+    if (!res.ok) { alert(data.detail || "Ошибка"); return; }
+    myStickerPacksCache = null;
+    await renderStickerPackScreen();
+  } catch { alert("Сервер не отвечает"); }
+}
+
+async function deleteStickerFromPack(stickerId) {
+  try {
+    await fetch(`${API_BASE}/stickers/${stickerId}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+    myStickerPacksCache = null;
+    await renderStickerPackScreen();
+  } catch { alert("Сервер не отвечает"); }
+}
+
+// ---- СТИКЕРЫ: отправка в чат ----
+async function openStickerPicker() {
+  $("stickerPickerScreen").classList.add("active");
+  const body = $("stickerPickerBody");
+  body.innerHTML = `<div style="text-align:center;color:#6b6f7a;padding:20px;font-size:13px;">Загрузка...</div>`;
+  const packs = await fetchMyStickerPacks(true);
+  body.innerHTML = "";
+  const packsWithStickers = packs.filter(p => p.stickers && p.stickers.length > 0);
+  if (packsWithStickers.length === 0) {
+    body.innerHTML = `<div class="stickerPickerEmpty">У тебя ещё нет стикеров.<br>Зайди в Настройки → Стикеры, чтобы создать пак и добавить картинки из галереи.</div>`;
+    return;
+  }
+  packsWithStickers.forEach(pack => {
+    const label = document.createElement("div"); label.className = "stickerPickerGroupLabel"; label.textContent = pack.name;
+    const grid = document.createElement("div"); grid.className = "stickerPickerGrid";
+    pack.stickers.forEach(st => {
+      const btn = document.createElement("button"); btn.className = "stickerPickerItem";
+      btn.innerHTML = `<img src="${st.image_data}" alt="">`;
+      btn.onclick = () => sendStickerMessage(st.image_data);
+      grid.appendChild(btn);
+    });
+    body.appendChild(label); body.appendChild(grid);
+  });
+}
+function closeStickerPicker() { $("stickerPickerScreen").classList.remove("active"); }
+
+async function sendStickerMessage(imageData) {
+  closeStickerPicker();
+  await sendChatPayload({ content: "", message_type: "sticker", media_data: imageData });
+}
+
+// ---- СТИКЕРЫ: сохранить чужой стикер к себе ----
+async function openStickerAddChooser(imageData) {
+  const packs = await fetchMyStickerPacks(true);
+  const overlay = document.createElement("div");
+  overlay.className = "stickerAddSheet";
+  const sheet = document.createElement("div"); sheet.className = "stickerAddSheetBody";
+
+  const title = document.createElement("div"); title.className = "stickerAddSheetTitle";
+  title.textContent = "Добавить в свои стикеры";
+  sheet.appendChild(title);
+
+  if (packs.length === 0) {
+    const empty = document.createElement("div");
+    empty.style.cssText = "text-align:center;color:#6b6f7a;font-size:13px;padding:10px 4px 4px;line-height:1.5;";
+    empty.textContent = "Сначала создай стикерпак в Настройках → Стикеры.";
+    sheet.appendChild(empty);
+  } else {
+    packs.forEach(pack => {
+      const row = document.createElement("div");
+      const full = pack.sticker_count >= 10;
+      row.className = "stickerAddSheetRow" + (full ? " disabled" : "");
+      row.innerHTML = `<span>${escapeHtml(pack.name)}</span><span>${pack.sticker_count}/10</span>`;
+      row.onclick = async () => {
+        if (full) return;
+        overlay.remove();
+        try {
+          const res = await fetch(`${API_BASE}/stickers/packs/${pack.id}/stickers`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ image_data: imageData }) });
+          if (!res.ok) { const d = await res.json().catch(() => ({})); alert(d.detail || "Ошибка"); return; }
+          myStickerPacksCache = null;
+        } catch { alert("Сервер не отвечает"); }
+      };
+      sheet.appendChild(row);
+    });
+  }
+
+  const cancelBtn = document.createElement("button"); cancelBtn.className = "stickerAddSheetCancel"; cancelBtn.textContent = "Отмена";
+  cancelBtn.onclick = () => overlay.remove();
+  sheet.appendChild(cancelBtn);
+
+  overlay.appendChild(sheet);
+  overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+  document.body.appendChild(overlay);
+}
+
 // ---- FAB ----
 let fabOpen = false;
 function toggleFab() { fabOpen = !fabOpen; $("fab").classList.toggle("open", fabOpen); $("fabMenu").classList.toggle("hidden", !fabOpen); }
@@ -1583,6 +1825,21 @@ $("avatarFileInput").addEventListener("change", onAvatarFileChosen);
 $("settingsBtn").onclick     = openSettings;
 $("settingsBackBtn").onclick = closeSettings;
 $("soundToggleRow").onclick  = toggleSound;
+
+$("stickerPacksRow").onclick    = openStickersScreen;
+$("stickersBackBtn").onclick    = closeStickersScreen;
+$("createPackBtn").onclick      = toggleCreatePackForm;
+$("createPackConfirmBtn").onclick = createStickerPack;
+$("newPackNameInput").addEventListener("keypress", e => { if (e.key === "Enter") createStickerPack(); });
+$("stickerPackBackBtn").onclick = closeStickerPackScreen;
+$("deletePackBtn").onclick      = async () => {
+  const pack = await fetchStickerPack(currentStickerPackId);
+  if (pack) { closeStickerPackScreen(); deleteStickerPackConfirm(pack); }
+};
+$("stickerFileInput").addEventListener("change", onStickerFileChosen);
+
+$("stickerBtn").onclick            = openStickerPicker;
+$("stickerPickerBackBtn").onclick  = closeStickerPicker;
 
 if ($("membersBtn"))     $("membersBtn").onclick     = openMembers;
 if ($("membersBackBtn")) $("membersBackBtn").onclick = closeMembers;
