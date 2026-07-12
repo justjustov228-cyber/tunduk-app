@@ -128,6 +128,7 @@
     <div id="inputBar">  
       <button id="attachBtn"></button>  
       <input type="file" id="chatImageInput" accept="image/*" style="display:none;">  
+      <button id="stickerBtn"></button>  
       <input id="msgInput" type="text" placeholder="Сообщение...">  
       <button id="micBtn"></button>  
       <button id="sendBtn" class="hidden"></button>  
@@ -143,6 +144,15 @@
         <button id="sendRecordingBtn"></button>  
       </div>  
     </div>  
+  </div>  
+
+  <!-- Пикер стикеров для отправки -->  
+  <div id="stickerPickerScreen">  
+    <div class="screenHeader">  
+      <button id="stickerPickerBackBtn"></button>  
+      <strong>Стикеры</strong>  
+    </div>  
+    <div id="stickerPickerBody"></div>  
   </div>  
 
   <!-- Members / Admin management -->  
@@ -173,6 +183,32 @@
     </div>  
   </div>  
 
+  <!-- Стикерпаки: список -->  
+  <div id="stickersScreen">  
+    <div class="screenHeader">  
+      <button id="stickersBackBtn"></button>  
+      <strong>Стикерпаки</strong>  
+      <button id="createPackBtn" style="margin-left:auto;"></button>  
+    </div>  
+    <div id="createPackForm" class="hidden">  
+      <input id="newPackNameInput" type="text" maxlength="64" placeholder="Название стикерпака">  
+      <button id="createPackConfirmBtn">Создать</button>  
+    </div>  
+    <div id="stickerPacksList"></div>  
+  </div>  
+
+  <!-- Стикерпак: содержимое -->  
+  <div id="stickerPackScreen">  
+    <div class="screenHeader">  
+      <button id="stickerPackBackBtn"></button>  
+      <strong id="stickerPackTitle">Стикерпак</strong>  
+      <button id="deletePackBtn" style="margin-left:auto;"></button>  
+    </div>  
+    <div id="stickerPackCount"></div>  
+    <div id="stickerGrid"></div>  
+    <input type="file" id="stickerFileInput" accept="image/*" style="display:none;">  
+  </div>  
+
   <!-- Profile -->  
   <div id="profileScreen">  
     <div class="screenHeader">  
@@ -185,6 +221,15 @@
         <div class="avatarEditBtn" id="avatarEditBtn"></div>  
         <input type="file" id="avatarFileInput" accept="image/*" style="display:none;">  
       </div>  
+
+      <div class="profileFullName" id="profileFullNameDisplay"></div>  
+      <div class="profileHandle" id="profileHandleDisplay"></div>  
+
+      <label>Имя</label>  
+      <input id="profileFirstNameInput" type="text" maxlength="64">  
+
+      <label>Фамилия</label>  
+      <input id="profileLastNameInput" type="text" maxlength="64">  
 
       <label>Имя пользователя</label>  
       <input id="profileUsernameInput" type="text" maxlength="32">  
@@ -217,6 +262,16 @@
       <div class="settingsGroup">  
         <div class="settingsGroupLabel">Оформление чата</div>  
         <div class="wallpaperGrid" id="wallpaperGrid"></div>  
+      </div>  
+      <div class="settingsGroup">  
+        <div class="settingsGroupLabel">Стикеры</div>  
+        <div class="settingsRow" id="stickerPacksRow">  
+          <div class="settingsRowLeft">  
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>  
+            <span class="settingsRowLabel">Мои стикерпаки</span>  
+          </div>  
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="color:#6b6f7a;"><polyline points="9 18 15 12 9 6"/></svg>  
+        </div>  
       </div>  
     </div>  
   </div>  
@@ -352,4 +407,4 @@
 </div>
 
   </div>    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>    <script src="app.js"></script>  </body>  
-    </html>
+          </html>
