@@ -273,6 +273,8 @@ body {
   font-size: 15px; font-weight: 600; cursor: pointer;
 }
 #profileMsg, #createChannelMsg, #createGroupMsg { font-size: 13px; min-height: 16px; }
+.profileFullName { font-size: 19px; font-weight: 700; text-align: center; }
+.profileHandle { font-size: 13px; color: #6b6f7a; text-align: center; margin-bottom: 6px; }
 
 /* Type selector */
 .typeSelector { display: flex; gap: 10px; width: 100%; max-width: 320px; }
@@ -535,6 +537,141 @@ body {
   cursor: pointer; flex-shrink: 0;
 }
 .memberAdminToggle:active { background: #262932; }
+
+/* ---- Стикерпаки: список ---- */
+#stickersScreen {
+  display: none;
+  position: absolute;
+  inset: 0;
+  flex-direction: column;
+  background: #15171c;
+  animation: panelIn 0.2s ease-out;
+  z-index: 6;
+}
+#stickersScreen.active { display: flex; }
+#stickersScreen .screenHeader button:last-child { color: #e8a23d; }
+#createPackForm {
+  display: flex; gap: 8px; padding: 12px 14px; border-bottom: 1px solid #1d2027;
+}
+#createPackForm.hidden { display: none; }
+#createPackForm input {
+  flex: 1; padding: 10px 12px; border-radius: 10px;
+  border: 1px solid #2c2f37; background: #1e2128; color: #f0ede4; font-size: 14px;
+}
+#createPackForm input:focus { outline: none; border-color: #e8a23d; }
+#createPackForm button {
+  padding: 10px 16px; border-radius: 10px; border: none;
+  background: #e8a23d; color: #1a1305; font-weight: 600; font-size: 14px; cursor: pointer; flex-shrink: 0;
+}
+#stickerPacksList { flex: 1; overflow-y: auto; padding: 6px 0; }
+.packRow {
+  display: flex; align-items: center; gap: 12px;
+  padding: 13px 14px; border-bottom: 1px solid #1d2027; cursor: pointer;
+}
+.packRow:active { background: #1c1f26; }
+.packRowIcon {
+  width: 42px; height: 42px; border-radius: 12px; background: #262932;
+  display: flex; align-items: center; justify-content: center; color: #e8a23d; flex-shrink: 0; overflow: hidden;
+}
+.packRowIcon img { width: 100%; height: 100%; object-fit: cover; }
+.packRowInfo { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.packRowInfo > span:first-child { font-size: 15px; }
+.packRowCount { font-size: 12px; color: #6b6f7a; margin-top: 2px; }
+.packRowDelete { background: none; border: none; color: #d9694f; padding: 6px; cursor: pointer; flex-shrink: 0; }
+
+/* ---- Стикерпак: содержимое ---- */
+#stickerPackScreen {
+  display: none;
+  position: absolute;
+  inset: 0;
+  flex-direction: column;
+  background: #15171c;
+  animation: panelIn 0.2s ease-out;
+  z-index: 7;
+}
+#stickerPackScreen.active { display: flex; }
+#stickerPackScreen .screenHeader button:last-child { color: #d9694f; }
+#stickerPackCount { padding: 10px 14px 0; font-size: 12px; color: #6b6f7a; }
+#stickerGrid {
+  flex: 1; overflow-y: auto; padding: 14px;
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+}
+.stickerTile {
+  position: relative; aspect-ratio: 1; border-radius: 12px; background: #1e2128;
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+}
+.stickerTile img { width: 82%; height: 82%; object-fit: contain; }
+.stickerTileDelete {
+  position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border-radius: 50%;
+  background: rgba(0,0,0,0.55); border: none; color: #fff;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.stickerAddTile {
+  border: 2px dashed #2c2f37; color: #6b6f7a; cursor: pointer; background: transparent;
+}
+.stickerAddTile:active { background: #1c1f26; }
+.stickerAddTile.disabled { opacity: 0.35; pointer-events: none; }
+
+/* ---- Пикер стикеров при отправке ---- */
+#stickerPickerScreen {
+  display: none;
+  position: absolute;
+  inset: 0;
+  flex-direction: column;
+  background: #15171c;
+  animation: panelIn 0.18s ease-out;
+  z-index: 8;
+}
+#stickerPickerScreen.active { display: flex; }
+#stickerPickerBody { flex: 1; overflow-y: auto; padding: 6px 0 16px; }
+.stickerPickerGroupLabel { font-size: 12px; color: #6b6f7a; text-transform: uppercase; letter-spacing: 0.04em; padding: 12px 14px 8px; }
+.stickerPickerGrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 0 14px; }
+.stickerPickerItem {
+  aspect-ratio: 1; border-radius: 10px; background: #1e2128; border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; padding: 6px;
+}
+.stickerPickerItem:active { background: #262932; }
+.stickerPickerItem img { width: 100%; height: 100%; object-fit: contain; }
+.stickerPickerEmpty { padding: 40px 30px; text-align: center; color: #6b6f7a; font-size: 13px; line-height: 1.6; }
+
+/* ---- Сообщения-стикеры (без пузыря, прозрачные, как в Телеграме) ---- */
+.msg.sticker {
+  background: transparent !important; padding: 0; max-width: 148px; position: relative;
+}
+.msg.sticker img { display: block; width: 128px; height: 128px; object-fit: contain; cursor: pointer; }
+.msg.sticker .meta {
+  position: absolute; bottom: 2px; right: 4px; margin: 0; padding: 1px 6px;
+  background: rgba(0,0,0,0.45); border-radius: 8px; color: #fff; opacity: 1; font-size: 10px;
+}
+
+/* ---- Кнопка стикеров в inputBar ---- */
+#stickerBtn { background: transparent; color: #8b8f99; }
+#stickerBtn:active { background: #262932; }
+
+/* ---- Действие "добавить в мои стикеры" (динамический overlay) ---- */
+.stickerAddSheet {
+  position: fixed; inset: 0; z-index: 1001; display: flex; align-items: flex-end; justify-content: center;
+  background: rgba(0,0,0,0.55);
+}
+.stickerAddSheetBody {
+  width: 100%; max-width: 480px; background: #1a1c22; border-radius: 16px 16px 0 0;
+  padding: 18px 16px calc(18px + env(safe-area-inset-bottom, 0px));
+  display: flex; flex-direction: column; gap: 4px; max-height: 70vh; overflow-y: auto;
+}
+.stickerAddSheetTitle { font-size: 15px; font-weight: 600; margin-bottom: 8px; text-align: center; }
+.stickerAddSheetRow {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 12px 10px; border-radius: 10px; cursor: pointer;
+}
+.stickerAddSheetRow:active { background: #262932; }
+.stickerAddSheetRow.disabled { opacity: 0.4; pointer-events: none; }
+.stickerAddSheetRow span:first-child { font-size: 14px; }
+.stickerAddSheetRow span:last-child { font-size: 12px; color: #6b6f7a; }
+.stickerAddSheetCancel {
+  margin-top: 8px; padding: 12px; border-radius: 10px; border: none;
+  background: #262932; color: #f0ede4; font-size: 14px; cursor: pointer;
+}
+
 
 #membersBtn {
   background: none; border: none; color: #e8a23d;
