@@ -73,6 +73,7 @@ const ICONS = {
   plus:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
   close:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
   sticker: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="19" height="19"><path d="M15 3H7a4 4 0 0 0-4 4v10a4 4 0 0 0 4 4h8a4 4 0 0 0 4-4v-6"/><path d="M15 3l6 6h-4a2 2 0 0 1-2-2z"/><circle cx="9" cy="10" r="1"/><circle cx="14" cy="10" r="1"/><path d="M8.5 14.5c1 1 5 1 6 0"/></svg>`,
+  lock:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`,
 };
 
 function injectIcons() {
@@ -106,6 +107,7 @@ function injectIcons() {
   $("stickerPackBackBtn").innerHTML = ICONS.back;
   $("deletePackBtn").innerHTML = ICONS.trash;
   $("stickerPickerBackBtn").innerHTML = ICONS.back;
+  $("chatEncryptedBadge").innerHTML = ICONS.lock;
 }
 
 function setStatus(text, online) {
@@ -406,6 +408,7 @@ async function loadMyId() {
     myUserId = me.id; myBio = me.bio || ""; myAvatar = me.avatar || "";
     myFirstName = me.first_name || ""; myLastName = me.last_name || "";
     updateMyAvatarUI();
+    ensureE2EKeypair(me.e2e_public_key || null);
   } catch (e) { console.error(e); }
 }
 
@@ -687,6 +690,7 @@ async function openUserChat(username) {
   $("callBtn").classList.remove("hidden");
   const profile = await fetchUserProfile(username);
   renderAvatarInto($("chatAvatarSmall"), username, profile ? profile.avatar : "");
+  $("chatEncryptedBadge").classList.toggle("hidden", !isE2EAvailable(username));
   addRecentChat(username, "user");
   await loadUserHistory(username);
 }
@@ -711,6 +715,7 @@ async function openChannelChat(ch) {
   currentChatIsAdmin ? $("inputBar").classList.remove("readonly") : $("inputBar").classList.add("readonly");
   if ($("membersBtn")) $("membersBtn").classList.remove("hidden");
   $("callBtn").classList.add("hidden");
+  $("chatEncryptedBadge").classList.add("hidden");
   renderAvatarInto($("chatAvatarSmall"), ch.name, ch.avatar);
   addRecentChat(ch.id, "channel");
   await loadChannelHistory(ch.id);
@@ -736,6 +741,7 @@ async function openGroupChat(gr) {
   $("inputBar").classList.remove("readonly");
   if ($("membersBtn")) $("membersBtn").classList.remove("hidden");
   $("callBtn").classList.add("hidden");
+  $("chatEncryptedBadge").classList.add("hidden");
   renderAvatarInto($("chatAvatarSmall"), gr.name, gr.avatar);
   addRecentChat(gr.id, "group");
   await loadGroupHistory(gr.id);
@@ -893,11 +899,18 @@ async function loadUserHistory(username) {
     const res = await fetch(`${API_BASE}/messages/${encodeURIComponent(username)}`, { headers: { Authorization: `Bearer ${token}` } });
     if (res.status === 401) { logout(); return; }
     const history = await res.json();
-    messageCache[`user:${username}`] = history.map(m => ({
-      content: m.content, timestamp: m.timestamp,
-      mine: myUserId !== null && m.sender_id === myUserId, delivered: m.delivered,
-      message_type: m.message_type, media_data: m.media_data, duration: m.duration,
-    }));
+    const otherProfile = userProfileCache[username] || await fetchUserProfile(username);
+    const otherPk = otherProfile ? otherProfile.e2e_public_key : null;
+    const entries = [];
+    for (const m of history) {
+      const resolved = await resolveEncryptedFields(m.message_type, m.content, m.media_data, m.encrypted, otherPk);
+      entries.push({
+        content: resolved.content, media_data: resolved.media_data, message_type: resolved.message_type,
+        timestamp: m.timestamp, mine: myUserId !== null && m.sender_id === myUserId,
+        delivered: m.delivered, duration: m.duration,
+      });
+    }
+    messageCache[`user:${username}`] = entries;
     renderMessages(`user:${username}`);
   } catch { $("messages").innerHTML = `<div style="text-align:center;color:#f44336;padding:20px;">Ошибка загрузки</div>`; }
 }
@@ -1028,7 +1041,17 @@ async function sendChatPayload(payload) {
   // payload: { content, message_type, media_data?, duration? }
   if (currentChatType === "user") {
     if (!ws || ws.readyState !== WebSocket.OPEN) { alert("Нет соединения"); return false; }
-    ws.send(JSON.stringify({ receiver: currentChatWith, ...payload }));
+    const outgoing = { receiver: currentChatWith, ...payload };
+    if (isE2EAvailable(currentChatWith)) {
+      const recipientPk = userProfileCache[currentChatWith].e2e_public_key;
+      const field = payload.message_type === "text" ? "content" : "media_data";
+      const plain = outgoing[field];
+      if (plain) {
+        const cipher = await e2eEncrypt(plain, recipientPk);
+        if (cipher) { outgoing[field] = cipher; outgoing.encrypted = true; }
+      }
+    }
+    ws.send(JSON.stringify(outgoing));
     return true;
   }
   if (currentChatType === "channel") {
@@ -1202,19 +1225,119 @@ function showIncomingNotification(fromUsername, content) {
 }
 
 // ---- WEBSOCKET ----
+// ---- E2E ШИФРОВАНИЕ ЛИЧНЫХ ЧАТОВ ----
+// Приватный ключ никогда не покидает устройство. Сервер хранит только публичные
+// ключи и непрозрачные зашифрованные блоки — расшифровать переписку на сервере
+// невозможно даже владельцу бэкенда. Работает только для личных чатов (1 на 1),
+// как Secret Chats в Telegram — групповое E2E требует другого протокола.
+let myE2ESecretKey = null;
+let myE2EPublicKey = null;
+let e2eAvailable   = false; // sodium загружен и мой ключ готов
+
+function e2eStorageKey() { return `tunduk_e2e_${myUsername}`; }
+
+async function ensureE2EKeypair(serverPublicKey) {
+  if (!window.sodiumReady) { e2eAvailable = false; return; }
+  try {
+    const sodium = await window.sodiumReady;
+    let stored = null;
+    try { stored = JSON.parse(localStorage.getItem(e2eStorageKey()) || "null"); } catch {}
+
+    if (stored && stored.sk && stored.pk) {
+      myE2ESecretKey = stored.sk;
+      myE2EPublicKey = stored.pk;
+    } else {
+      const kp = sodium.crypto_box_keypair();
+      myE2ESecretKey = sodium.to_base64(kp.privateKey, sodium.base64_variants.ORIGINAL);
+      myE2EPublicKey = sodium.to_base64(kp.publicKey, sodium.base64_variants.ORIGINAL);
+      localStorage.setItem(e2eStorageKey(), JSON.stringify({ sk: myE2ESecretKey, pk: myE2EPublicKey }));
+    }
+
+    e2eAvailable = true;
+
+    // Публикуем публичный ключ, если на сервере его нет или он расходится с локальным
+    if (serverPublicKey !== myE2EPublicKey) {
+      try {
+        await fetch(`${API_BASE}/me`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ e2e_public_key: myE2EPublicKey }),
+        });
+      } catch {}
+    }
+  } catch (e) {
+    console.error("Не удалось подготовить ключ шифрования:", e);
+    e2eAvailable = false;
+  }
+}
+
+async function e2eEncrypt(plaintext, recipientPublicKeyB64) {
+  if (!e2eAvailable || !plaintext) return null;
+  try {
+    const sodium = await window.sodiumReady;
+    const nonce = sodium.randombytes_buf(sodium.crypto_box_NONCEBYTES);
+    const recipientPk = sodium.from_base64(recipientPublicKeyB64, sodium.base64_variants.ORIGINAL);
+    const mySk = sodium.from_base64(myE2ESecretKey, sodium.base64_variants.ORIGINAL);
+    const cipher = sodium.crypto_box_easy(sodium.from_string(plaintext), nonce, recipientPk, mySk);
+    const combined = new Uint8Array(nonce.length + cipher.length);
+    combined.set(nonce, 0);
+    combined.set(cipher, nonce.length);
+    return sodium.to_base64(combined, sodium.base64_variants.ORIGINAL);
+  } catch (e) { console.error("Ошибка шифрования:", e); return null; }
+}
+
+async function e2eDecrypt(combinedB64, otherPartyPublicKeyB64) {
+  if (!e2eAvailable || !combinedB64 || !otherPartyPublicKeyB64) return null;
+  try {
+    const sodium = await window.sodiumReady;
+    const combined = sodium.from_base64(combinedB64, sodium.base64_variants.ORIGINAL);
+    const nonce = combined.slice(0, sodium.crypto_box_NONCEBYTES);
+    const cipher = combined.slice(sodium.crypto_box_NONCEBYTES);
+    const otherPk = sodium.from_base64(otherPartyPublicKeyB64, sodium.base64_variants.ORIGINAL);
+    const mySk = sodium.from_base64(myE2ESecretKey, sodium.base64_variants.ORIGINAL);
+    const plainBytes = sodium.crypto_box_open_easy(cipher, nonce, otherPk, mySk);
+    return sodium.to_string(plainBytes);
+  } catch (e) { console.error("Ошибка расшифровки:", e); return null; }
+}
+
+function isE2EAvailable(otherUsername) {
+  if (!e2eAvailable) return false;
+  const profile = userProfileCache[otherUsername];
+  return !!(profile && profile.e2e_public_key);
+}
+
+// Расшифровывает нужное поле сообщения (content для текста, media_data для остального).
+// otherPublicKey — публичный ключ собеседника (не важно, кто фактически отправитель:
+// ECDH-секрет симметричен, поэтому и входящие, и мои же исходящие сообщения
+// расшифровываются одним и тем же (мой секретный ключ + публичный ключ собеседника)).
+async function resolveEncryptedFields(messageType, content, mediaData, encrypted, otherPublicKey) {
+  if (!encrypted) return { content, media_data: mediaData, message_type: messageType };
+  const field = messageType === "text" ? "content" : "media_data";
+  const cipherValue = field === "content" ? content : mediaData;
+  const plain = await e2eDecrypt(cipherValue, otherPublicKey);
+  if (plain === null) {
+    return { content: "Не удалось расшифровать сообщение", media_data: null, message_type: "text" };
+  }
+  return field === "content"
+    ? { content: plain, media_data: mediaData, message_type: messageType }
+    : { content, media_data: plain, message_type: messageType };
+}
+
 function connectWebSocket() {
   if (ws) ws.close();
   ws = new WebSocket(`${WS_BASE}/ws?token=${encodeURIComponent(token)}`);
   ws.onopen  = () => setStatus("онлайн", true);
   ws.onclose = () => { setStatus("отключено, переподключение...", false); if (token) setTimeout(connectWebSocket, 3000); };
   ws.onerror = () => setStatus("ошибка соединения", false);
-  ws.onmessage = event => {
+  ws.onmessage = async event => {
     let data; try { data = JSON.parse(event.data); } catch { return; }
     if (data.type === "error") { alert("Ошибка: " + data.detail); return; }
     if (data.type === "message") {
       const other = data.sender; const key = `user:${other}`;
+      const otherProfile = userProfileCache[other] || await fetchUserProfile(other);
+      const resolved = await resolveEncryptedFields(data.message_type, data.content, data.media_data, data.encrypted, otherProfile ? otherProfile.e2e_public_key : null);
       if (!messageCache[key]) messageCache[key] = [];
-      const entry = { content: data.content, mine: false, timestamp: data.timestamp, message_type: data.message_type, media_data: data.media_data, duration: data.duration };
+      const entry = { content: resolved.content, mine: false, timestamp: data.timestamp, message_type: resolved.message_type, media_data: resolved.media_data, duration: data.duration };
       messageCache[key].push(entry);
 
       const wasNewChat = !getRecentChats().includes(key);
@@ -1224,7 +1347,7 @@ function connectWebSocket() {
         addMessageBubble(entry);
       } else {
         // Чат не открыт прямо сейчас — показываем уведомление и обновляем список
-        const preview = data.message_type === "image" ? "Фото" : data.message_type === "voice" ? "Голосовое сообщение" : data.message_type === "sticker" ? "Стикер" : data.content;
+        const preview = resolved.message_type === "image" ? "Фото" : resolved.message_type === "voice" ? "Голосовое сообщение" : resolved.message_type === "sticker" ? "Стикер" : resolved.content;
         showIncomingNotification(other, preview);
         renderRecentChats();
       }
@@ -1232,8 +1355,10 @@ function connectWebSocket() {
     }
     if (data.type === "ack") {
       const other = data.receiver; const key = `user:${other}`;
+      const otherProfile = userProfileCache[other] || await fetchUserProfile(other);
+      const resolved = await resolveEncryptedFields(data.message_type, data.content, data.media_data, data.encrypted, otherProfile ? otherProfile.e2e_public_key : null);
       if (!messageCache[key]) messageCache[key] = [];
-      const entry = { content: data.content, mine: true, timestamp: data.timestamp, delivered: data.delivered, message_type: data.message_type, media_data: data.media_data, duration: data.duration };
+      const entry = { content: resolved.content, mine: true, timestamp: data.timestamp, delivered: data.delivered, message_type: resolved.message_type, media_data: resolved.media_data, duration: data.duration };
       messageCache[key].push(entry);
       if (currentChatType === "user" && currentChatWith === other) addMessageBubble(entry);
     }
