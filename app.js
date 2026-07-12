@@ -24,6 +24,16 @@ let userProfileCache  = {};
 
 let soundEnabled     = localStorage.getItem("tunduk_sound") !== "off";
 let currentWallpaper = localStorage.getItem("tunduk_wallpaper") || "none";
+let currentTheme     = localStorage.getItem("tunduk_theme") || "orange";
+
+const THEMES = [
+  { id: "orange", accent: "#e8a23d", text: "#1a1305" },
+  { id: "blurple", accent: "#5865f2", text: "#ffffff" },
+  { id: "green",  accent: "#3ba55d", text: "#ffffff" },
+  { id: "pink",   accent: "#eb459e", text: "#ffffff" },
+  { id: "red",    accent: "#ed4245", text: "#ffffff" },
+  { id: "teal",   accent: "#11a8cd", text: "#ffffff" },
+];
 
 let channelAvatarData = "";
 let groupAvatarData   = "";
@@ -212,6 +222,19 @@ function showVerifyForm(email) {
   $("verifyEmailLabel").textContent = email;
   $("verifyError").textContent = "";
   $("verifyCode").value = "";
+}
+
+// ---- ЮЗЕРНЕЙМЫ/HANDLE: только латиница, цифры, _ ----
+function restrictToLatinHandle(el) {
+  el.addEventListener("input", () => {
+    const start = el.selectionStart;
+    const cleaned = el.value.replace(/[^A-Za-z0-9_]/g, "");
+    if (cleaned !== el.value) {
+      const removedBefore = el.value.slice(0, start).replace(/[^A-Za-z0-9_]/g, "").length;
+      el.value = cleaned;
+      el.setSelectionRange(removedBefore, removedBefore);
+    }
+  });
 }
 
 // ---- AUTH: проверка занятости username в реальном времени ----
@@ -1432,8 +1455,24 @@ async function handleCallSignal(data) {
 }
 
 // ---- SETTINGS ----
-function openSettings() { $("settingsScreen").classList.add("active"); renderSoundToggle(); renderWallpaperGrid(); }
+function openSettings() { $("settingsScreen").classList.add("active"); renderThemeGrid(); renderSoundToggle(); renderWallpaperGrid(); }
 function closeSettings() { $("settingsScreen").classList.remove("active"); }
+function renderThemeGrid() {
+  const grid = $("themeGrid"); grid.innerHTML = "";
+  THEMES.forEach(t => {
+    const div = document.createElement("div");
+    div.className = "themeSwatch" + (t.id === currentTheme ? " active" : "");
+    div.style.background = t.accent;
+    div.onclick = () => selectTheme(t.id);
+    grid.appendChild(div);
+  });
+}
+function selectTheme(id) { currentTheme = id; localStorage.setItem("tunduk_theme", id); renderThemeGrid(); applyTheme(); }
+function applyTheme() {
+  const t = THEMES.find(x => x.id === currentTheme) || THEMES[0];
+  document.documentElement.style.setProperty("--accent", t.accent);
+  document.documentElement.style.setProperty("--accent-text", t.text);
+}
 function renderSoundToggle() { $("soundToggle").classList.toggle("on", soundEnabled); }
 function toggleSound() { soundEnabled = !soundEnabled; localStorage.setItem("tunduk_sound", soundEnabled ? "on" : "off"); renderSoundToggle(); }
 function renderWallpaperGrid() {
@@ -1778,6 +1817,7 @@ if (typeof emailjs !== "undefined") {
 }
 
 injectIcons();
+applyTheme();
 applyWallpaper();
 requestNotifyPermission();
 
@@ -1794,6 +1834,10 @@ $("alreadyGotCodeBtn").onclick = () => {
   showVerifyForm(email);
 };
 $("regUsername").addEventListener("input", onRegUsernameInput);
+restrictToLatinHandle($("regUsername"));
+restrictToLatinHandle($("profileUsernameInput"));
+restrictToLatinHandle($("channelHandleInput"));
+restrictToLatinHandle($("groupHandleInput"));
 $("verifyBackBtn").onclick   = showRegisterForm;
 $("verifySubmitBtn").onclick = registerVerify;
 $("verifyCode").addEventListener("keypress", e => { if (e.key === "Enter") registerVerify(); });
