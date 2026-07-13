@@ -24,16 +24,6 @@ let userProfileCache  = {};
 
 let soundEnabled     = localStorage.getItem("tunduk_sound") !== "off";
 let currentWallpaper = localStorage.getItem("tunduk_wallpaper") || "none";
-let currentTheme     = localStorage.getItem("tunduk_theme") || "orange";
-
-const THEMES = [
-  { id: "orange", accent: "#e8a23d", text: "#1a1305" },
-  { id: "blurple", accent: "#5865f2", text: "#ffffff" },
-  { id: "green",  accent: "#3ba55d", text: "#ffffff" },
-  { id: "pink",   accent: "#eb459e", text: "#ffffff" },
-  { id: "red",    accent: "#ed4245", text: "#ffffff" },
-  { id: "teal",   accent: "#11a8cd", text: "#ffffff" },
-];
 
 let channelAvatarData = "";
 let groupAvatarData   = "";
@@ -73,7 +63,6 @@ const ICONS = {
   plus:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
   close:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
   sticker: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="19" height="19"><path d="M15 3H7a4 4 0 0 0-4 4v10a4 4 0 0 0 4 4h8a4 4 0 0 0 4-4v-6"/><path d="M15 3l6 6h-4a2 2 0 0 1-2-2z"/><circle cx="9" cy="10" r="1"/><circle cx="14" cy="10" r="1"/><path d="M8.5 14.5c1 1 5 1 6 0"/></svg>`,
-  lock:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`,
 };
 
 function injectIcons() {
@@ -107,7 +96,6 @@ function injectIcons() {
   $("stickerPackBackBtn").innerHTML = ICONS.back;
   $("deletePackBtn").innerHTML = ICONS.trash;
   $("stickerPickerBackBtn").innerHTML = ICONS.back;
-  $("chatEncryptedBadge").innerHTML = ICONS.lock;
 }
 
 function setStatus(text, online) {
@@ -176,7 +164,7 @@ function migrateRecentChats() {
 // ---- АВАТАРЫ ----
 function renderAvatarInto(el, name, avatarDataUrl) {
   if (avatarDataUrl) {
-    el.innerHTML = `<img src="${avatarDataUrl}" alt="" style="width:100%;height:100%;object-fit:cover;">`;
+    el.innerHTML = `<img src="${escapeAttr(avatarDataUrl)}" alt="" style="width:100%;height:100%;object-fit:cover;">`;
     el.style.background = "";
   } else {
     const letter = (name || "?").trim().charAt(0).toUpperCase();
@@ -408,7 +396,6 @@ async function loadMyId() {
     myUserId = me.id; myBio = me.bio || ""; myAvatar = me.avatar || "";
     myFirstName = me.first_name || ""; myLastName = me.last_name || "";
     updateMyAvatarUI();
-    ensureE2EKeypair(me.e2e_public_key || null);
   } catch (e) { console.error(e); }
 }
 
@@ -690,7 +677,6 @@ async function openUserChat(username) {
   $("callBtn").classList.remove("hidden");
   const profile = await fetchUserProfile(username);
   renderAvatarInto($("chatAvatarSmall"), username, profile ? profile.avatar : "");
-  $("chatEncryptedBadge").classList.toggle("hidden", !isE2EAvailable(username));
   addRecentChat(username, "user");
   await loadUserHistory(username);
 }
@@ -715,7 +701,6 @@ async function openChannelChat(ch) {
   currentChatIsAdmin ? $("inputBar").classList.remove("readonly") : $("inputBar").classList.add("readonly");
   if ($("membersBtn")) $("membersBtn").classList.remove("hidden");
   $("callBtn").classList.add("hidden");
-  $("chatEncryptedBadge").classList.add("hidden");
   renderAvatarInto($("chatAvatarSmall"), ch.name, ch.avatar);
   addRecentChat(ch.id, "channel");
   await loadChannelHistory(ch.id);
@@ -741,7 +726,6 @@ async function openGroupChat(gr) {
   $("inputBar").classList.remove("readonly");
   if ($("membersBtn")) $("membersBtn").classList.remove("hidden");
   $("callBtn").classList.add("hidden");
-  $("chatEncryptedBadge").classList.add("hidden");
   renderAvatarInto($("chatAvatarSmall"), gr.name, gr.avatar);
   addRecentChat(gr.id, "group");
   await loadGroupHistory(gr.id);
@@ -899,18 +883,11 @@ async function loadUserHistory(username) {
     const res = await fetch(`${API_BASE}/messages/${encodeURIComponent(username)}`, { headers: { Authorization: `Bearer ${token}` } });
     if (res.status === 401) { logout(); return; }
     const history = await res.json();
-    const otherProfile = userProfileCache[username] || await fetchUserProfile(username);
-    const otherPk = otherProfile ? otherProfile.e2e_public_key : null;
-    const entries = [];
-    for (const m of history) {
-      const resolved = await resolveEncryptedFields(m.message_type, m.content, m.media_data, m.encrypted, otherPk);
-      entries.push({
-        content: resolved.content, media_data: resolved.media_data, message_type: resolved.message_type,
-        timestamp: m.timestamp, mine: myUserId !== null && m.sender_id === myUserId,
-        delivered: m.delivered, duration: m.duration,
-      });
-    }
-    messageCache[`user:${username}`] = entries;
+    messageCache[`user:${username}`] = history.map(m => ({
+      content: m.content, timestamp: m.timestamp,
+      mine: myUserId !== null && m.sender_id === myUserId, delivered: m.delivered,
+      message_type: m.message_type, media_data: m.media_data, duration: m.duration,
+    }));
     renderMessages(`user:${username}`);
   } catch { $("messages").innerHTML = `<div style="text-align:center;color:#f44336;padding:20px;">Ошибка загрузки</div>`; }
 }
@@ -1014,7 +991,7 @@ function addMessageBubble(m) {
   if (type === "image") {
     const hasCaption = !!(m.content && m.content.trim());
     div.className = "msg image " + (mine ? "mine" : "theirs") + (hasCaption ? "" : " noCaption");
-    div.innerHTML = `${nameHtml}<img src="${m.media_data}" alt="">${hasCaption ? `<div class="caption">${escapeHtml(m.content)}</div>` : ""}<div class="meta">${time}${tick}</div>`;
+    div.innerHTML = `${nameHtml}<img src="${escapeAttr(m.media_data)}" alt="">${hasCaption ? `<div class="caption">${escapeHtml(m.content)}</div>` : ""}<div class="meta">${time}${tick}</div>`;
     div.querySelector("img").onclick = () => openImageViewer(m.media_data);
   } else if (type === "voice") {
     div.className = "msg voice " + (mine ? "mine" : "theirs");
@@ -1023,7 +1000,7 @@ function addMessageBubble(m) {
     setupVoiceBubble(div, m.media_data, m.duration || 0);
   } else if (type === "sticker") {
     div.className = "msg sticker " + (mine ? "mine" : "theirs");
-    div.innerHTML = `${nameHtml}<img src="${m.media_data}" alt=""><div class="meta">${time}${tick}</div>`;
+    div.innerHTML = `${nameHtml}<img src="${escapeAttr(m.media_data)}" alt=""><div class="meta">${time}${tick}</div>`;
     div.querySelector("img").onclick = () => openStickerAddChooser(m.media_data);
   } else {
     div.className = "msg " + (mine ? "mine" : "theirs");
@@ -1036,22 +1013,24 @@ function addMessageBubble(m) {
 
 function escapeHtml(str) { const d = document.createElement("div"); d.textContent = str; return d.innerHTML; }
 
+// Сервер проверяет только префикс media_data/avatar ("data:image/..."), не всю строку —
+// специально собранное значение с кавычкой внутри может вырваться из src="..." и вставить
+// произвольный HTML/JS (хранимый XSS через чужой стикер/аватар/картинку в сообщении).
+// Легитимный data URL кавычек не содержит, так что экранирование ничего не ломает.
+function escapeAttr(str) {
+  return String(str == null ? "" : str)
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
 // ---- SEND ----
 async function sendChatPayload(payload) {
   // payload: { content, message_type, media_data?, duration? }
   if (currentChatType === "user") {
     if (!ws || ws.readyState !== WebSocket.OPEN) { alert("Нет соединения"); return false; }
-    const outgoing = { receiver: currentChatWith, ...payload };
-    if (isE2EAvailable(currentChatWith)) {
-      const recipientPk = userProfileCache[currentChatWith].e2e_public_key;
-      const field = payload.message_type === "text" ? "content" : "media_data";
-      const plain = outgoing[field];
-      if (plain) {
-        const cipher = await e2eEncrypt(plain, recipientPk);
-        if (cipher) { outgoing[field] = cipher; outgoing.encrypted = true; }
-      }
-    }
-    ws.send(JSON.stringify(outgoing));
+    ws.send(JSON.stringify({ receiver: currentChatWith, ...payload }));
     return true;
   }
   if (currentChatType === "channel") {
@@ -1140,7 +1119,7 @@ async function startVoiceRecording() {
   if (mediaRecorder) return;
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { alert("Микрофон не поддерживается этим браузером"); return; }
   try {
-    recordingStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    recordingStream = await navigator.mediaDevices.getUserMedia(CALL_AUDIO_CONSTRAINTS);
   } catch {
     alert("Нет доступа к микрофону");
     return;
@@ -1225,119 +1204,27 @@ function showIncomingNotification(fromUsername, content) {
 }
 
 // ---- WEBSOCKET ----
-// ---- E2E ШИФРОВАНИЕ ЛИЧНЫХ ЧАТОВ ----
-// Приватный ключ никогда не покидает устройство. Сервер хранит только публичные
-// ключи и непрозрачные зашифрованные блоки — расшифровать переписку на сервере
-// невозможно даже владельцу бэкенда. Работает только для личных чатов (1 на 1),
-// как Secret Chats в Telegram — групповое E2E требует другого протокола.
-let myE2ESecretKey = null;
-let myE2EPublicKey = null;
-let e2eAvailable   = false; // sodium загружен и мой ключ готов
-
-function e2eStorageKey() { return `tunduk_e2e_${myUsername}`; }
-
-async function ensureE2EKeypair(serverPublicKey) {
-  if (!window.sodiumReady) { e2eAvailable = false; return; }
-  try {
-    const sodium = await window.sodiumReady;
-    let stored = null;
-    try { stored = JSON.parse(localStorage.getItem(e2eStorageKey()) || "null"); } catch {}
-
-    if (stored && stored.sk && stored.pk) {
-      myE2ESecretKey = stored.sk;
-      myE2EPublicKey = stored.pk;
-    } else {
-      const kp = sodium.crypto_box_keypair();
-      myE2ESecretKey = sodium.to_base64(kp.privateKey, sodium.base64_variants.ORIGINAL);
-      myE2EPublicKey = sodium.to_base64(kp.publicKey, sodium.base64_variants.ORIGINAL);
-      localStorage.setItem(e2eStorageKey(), JSON.stringify({ sk: myE2ESecretKey, pk: myE2EPublicKey }));
-    }
-
-    e2eAvailable = true;
-
-    // Публикуем публичный ключ, если на сервере его нет или он расходится с локальным
-    if (serverPublicKey !== myE2EPublicKey) {
-      try {
-        await fetch(`${API_BASE}/me`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ e2e_public_key: myE2EPublicKey }),
-        });
-      } catch {}
-    }
-  } catch (e) {
-    console.error("Не удалось подготовить ключ шифрования:", e);
-    e2eAvailable = false;
-  }
-}
-
-async function e2eEncrypt(plaintext, recipientPublicKeyB64) {
-  if (!e2eAvailable || !plaintext) return null;
-  try {
-    const sodium = await window.sodiumReady;
-    const nonce = sodium.randombytes_buf(sodium.crypto_box_NONCEBYTES);
-    const recipientPk = sodium.from_base64(recipientPublicKeyB64, sodium.base64_variants.ORIGINAL);
-    const mySk = sodium.from_base64(myE2ESecretKey, sodium.base64_variants.ORIGINAL);
-    const cipher = sodium.crypto_box_easy(sodium.from_string(plaintext), nonce, recipientPk, mySk);
-    const combined = new Uint8Array(nonce.length + cipher.length);
-    combined.set(nonce, 0);
-    combined.set(cipher, nonce.length);
-    return sodium.to_base64(combined, sodium.base64_variants.ORIGINAL);
-  } catch (e) { console.error("Ошибка шифрования:", e); return null; }
-}
-
-async function e2eDecrypt(combinedB64, otherPartyPublicKeyB64) {
-  if (!e2eAvailable || !combinedB64 || !otherPartyPublicKeyB64) return null;
-  try {
-    const sodium = await window.sodiumReady;
-    const combined = sodium.from_base64(combinedB64, sodium.base64_variants.ORIGINAL);
-    const nonce = combined.slice(0, sodium.crypto_box_NONCEBYTES);
-    const cipher = combined.slice(sodium.crypto_box_NONCEBYTES);
-    const otherPk = sodium.from_base64(otherPartyPublicKeyB64, sodium.base64_variants.ORIGINAL);
-    const mySk = sodium.from_base64(myE2ESecretKey, sodium.base64_variants.ORIGINAL);
-    const plainBytes = sodium.crypto_box_open_easy(cipher, nonce, otherPk, mySk);
-    return sodium.to_string(plainBytes);
-  } catch (e) { console.error("Ошибка расшифровки:", e); return null; }
-}
-
-function isE2EAvailable(otherUsername) {
-  if (!e2eAvailable) return false;
-  const profile = userProfileCache[otherUsername];
-  return !!(profile && profile.e2e_public_key);
-}
-
-// Расшифровывает нужное поле сообщения (content для текста, media_data для остального).
-// otherPublicKey — публичный ключ собеседника (не важно, кто фактически отправитель:
-// ECDH-секрет симметричен, поэтому и входящие, и мои же исходящие сообщения
-// расшифровываются одним и тем же (мой секретный ключ + публичный ключ собеседника)).
-async function resolveEncryptedFields(messageType, content, mediaData, encrypted, otherPublicKey) {
-  if (!encrypted) return { content, media_data: mediaData, message_type: messageType };
-  const field = messageType === "text" ? "content" : "media_data";
-  const cipherValue = field === "content" ? content : mediaData;
-  const plain = await e2eDecrypt(cipherValue, otherPublicKey);
-  if (plain === null) {
-    return { content: "Не удалось расшифровать сообщение", media_data: null, message_type: "text" };
-  }
-  return field === "content"
-    ? { content: plain, media_data: mediaData, message_type: messageType }
-    : { content, media_data: plain, message_type: messageType };
-}
-
 function connectWebSocket() {
   if (ws) ws.close();
   ws = new WebSocket(`${WS_BASE}/ws?token=${encodeURIComponent(token)}`);
-  ws.onopen  = () => setStatus("онлайн", true);
+  ws.onopen  = () => {
+    setStatus("онлайн", true);
+    // Пока сокет был разорван (моргнула сеть, экран заблокировался и т.п.), сервер не
+    // досылает пропущенное само — досинхронизируемся вручную через REST.
+    syncContactsFromServer();
+    if (currentChatType === "user" && currentChatWith) loadUserHistory(currentChatWith);
+    else if (currentChatType === "channel" && currentChatId) loadChannelHistory(currentChatId);
+    else if (currentChatType === "group" && currentChatId) loadGroupHistory(currentChatId);
+  };
   ws.onclose = () => { setStatus("отключено, переподключение...", false); if (token) setTimeout(connectWebSocket, 3000); };
   ws.onerror = () => setStatus("ошибка соединения", false);
-  ws.onmessage = async event => {
+  ws.onmessage = event => {
     let data; try { data = JSON.parse(event.data); } catch { return; }
     if (data.type === "error") { alert("Ошибка: " + data.detail); return; }
     if (data.type === "message") {
       const other = data.sender; const key = `user:${other}`;
-      const otherProfile = userProfileCache[other] || await fetchUserProfile(other);
-      const resolved = await resolveEncryptedFields(data.message_type, data.content, data.media_data, data.encrypted, otherProfile ? otherProfile.e2e_public_key : null);
       if (!messageCache[key]) messageCache[key] = [];
-      const entry = { content: resolved.content, mine: false, timestamp: data.timestamp, message_type: resolved.message_type, media_data: resolved.media_data, duration: data.duration };
+      const entry = { content: data.content, mine: false, timestamp: data.timestamp, message_type: data.message_type, media_data: data.media_data, duration: data.duration };
       messageCache[key].push(entry);
 
       const wasNewChat = !getRecentChats().includes(key);
@@ -1347,7 +1234,7 @@ function connectWebSocket() {
         addMessageBubble(entry);
       } else {
         // Чат не открыт прямо сейчас — показываем уведомление и обновляем список
-        const preview = resolved.message_type === "image" ? "Фото" : resolved.message_type === "voice" ? "Голосовое сообщение" : resolved.message_type === "sticker" ? "Стикер" : resolved.content;
+        const preview = data.message_type === "image" ? "Фото" : data.message_type === "voice" ? "Голосовое сообщение" : data.message_type === "sticker" ? "Стикер" : data.content;
         showIncomingNotification(other, preview);
         renderRecentChats();
       }
@@ -1355,10 +1242,8 @@ function connectWebSocket() {
     }
     if (data.type === "ack") {
       const other = data.receiver; const key = `user:${other}`;
-      const otherProfile = userProfileCache[other] || await fetchUserProfile(other);
-      const resolved = await resolveEncryptedFields(data.message_type, data.content, data.media_data, data.encrypted, otherProfile ? otherProfile.e2e_public_key : null);
       if (!messageCache[key]) messageCache[key] = [];
-      const entry = { content: resolved.content, mine: true, timestamp: data.timestamp, delivered: data.delivered, message_type: resolved.message_type, media_data: resolved.media_data, duration: data.duration };
+      const entry = { content: data.content, mine: true, timestamp: data.timestamp, delivered: data.delivered, message_type: data.message_type, media_data: data.media_data, duration: data.duration };
       messageCache[key].push(entry);
       if (currentChatType === "user" && currentChatWith === other) addMessageBubble(entry);
     }
@@ -1369,7 +1254,15 @@ function connectWebSocket() {
 }
 
 // ---- ЗВОНКИ (WebRTC, аудио 1:1) ----
-const ICE_SERVERS = [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun1.l.google.com:19302" }];
+// Один STUN не всегда пробивает NAT (особенно с VPN или мобильной сетью) — добавлен
+// бесплатный TURN (Open Relay) как запасной путь для случаев, где прямое P2P невозможно.
+const ICE_SERVERS = [
+  { urls: "stun:stun.l.google.com:19302" },
+  { urls: "stun:stun1.l.google.com:19302" },
+  { urls: "turn:openrelay.metered.ca:80", username: "openrelayproject", credential: "openrelayproject" },
+  { urls: "turn:openrelay.metered.ca:443", username: "openrelayproject", credential: "openrelayproject" },
+  { urls: "turn:openrelay.metered.ca:443?transport=tcp", username: "openrelayproject", credential: "openrelayproject" },
+];
 const CALL_AUDIO_CONSTRAINTS = {
   audio: {
     noiseSuppression: true,
@@ -1389,6 +1282,7 @@ let callDeafened       = false;
 let callTimerInterval  = null;
 let callStartTime      = null;
 let ringtoneInterval   = null;
+let disconnectGraceTimer = null; // прощаем кратковременные обрывы сети вместо мгновенного завершения звонка
 
 function formatCallDuration(totalSeconds) {
   totalSeconds = Math.max(0, Math.round(totalSeconds));
@@ -1412,13 +1306,38 @@ function createCallPeerConnection() {
     remoteCallAudioEl.srcObject = e.streams[0];
   };
   pc.onconnectionstatechange = () => {
-    if (pc.connectionState === "connected" && callState !== "connected") {
-      callState = "connected";
-      stopRingtone();
-      startCallTimer();
-      showCallUI(callWithUsername, "connected");
+    const state = pc.connectionState;
+
+    if (state === "connected") {
+      if (disconnectGraceTimer) { clearTimeout(disconnectGraceTimer); disconnectGraceTimer = null; }
+      if (callState !== "connected") {
+        callState = "connected";
+        stopRingtone();
+        startCallTimer();
+        showCallUI(callWithUsername, "connected");
+      } else {
+        setCallStatusText("На связи");
+      }
+      return;
     }
-    if (["failed", "disconnected", "closed"].includes(pc.connectionState) && callState !== "idle") {
+
+    // "disconnected" почти всегда временная просадка (моргнул Wi-Fi, переключилась сеть
+    // на LTE) и часто сама восстанавливается — раньше звонок из-за этого рвался мгновенно,
+    // теперь даём немного времени на реконнект, прежде чем сдаться.
+    if (state === "disconnected") {
+      if (callState !== "idle" && !disconnectGraceTimer) {
+        setCallStatusText("Восстановление соединения...");
+        disconnectGraceTimer = setTimeout(() => {
+          disconnectGraceTimer = null;
+          if (pc.connectionState !== "connected" && callState !== "idle") endCallLocally();
+        }, 8000);
+      }
+      return;
+    }
+
+    // failed/closed — соединение точно не восстановится
+    if (["failed", "closed"].includes(state) && callState !== "idle") {
+      if (disconnectGraceTimer) { clearTimeout(disconnectGraceTimer); disconnectGraceTimer = null; }
       endCallLocally();
     }
   };
@@ -1499,6 +1418,7 @@ function endCallLocally() {
 function resetCallState() {
   stopRingtone();
   clearInterval(callTimerInterval);
+  if (disconnectGraceTimer) { clearTimeout(disconnectGraceTimer); disconnectGraceTimer = null; }
   if (callPeerConnection) { try { callPeerConnection.close(); } catch {} callPeerConnection = null; }
   if (localCallStream) { localCallStream.getTracks().forEach(t => t.stop()); localCallStream = null; }
   if (remoteCallAudioEl) { remoteCallAudioEl.srcObject = null; }
@@ -1580,24 +1500,10 @@ async function handleCallSignal(data) {
 }
 
 // ---- SETTINGS ----
-function openSettings() { $("settingsScreen").classList.add("active"); renderThemeGrid(); renderSoundToggle(); renderWallpaperGrid(); }
+// TODO: сюда же в будущем повесить переключатель тёмная/светлая тема (см. сводку проекта) —
+// цвета сейчас захардкожены в style.css, для теми их сперва нужно вынести в CSS-переменные.
+function openSettings() { $("settingsScreen").classList.add("active"); renderSoundToggle(); renderWallpaperGrid(); }
 function closeSettings() { $("settingsScreen").classList.remove("active"); }
-function renderThemeGrid() {
-  const grid = $("themeGrid"); grid.innerHTML = "";
-  THEMES.forEach(t => {
-    const div = document.createElement("div");
-    div.className = "themeSwatch" + (t.id === currentTheme ? " active" : "");
-    div.style.background = t.accent;
-    div.onclick = () => selectTheme(t.id);
-    grid.appendChild(div);
-  });
-}
-function selectTheme(id) { currentTheme = id; localStorage.setItem("tunduk_theme", id); renderThemeGrid(); applyTheme(); }
-function applyTheme() {
-  const t = THEMES.find(x => x.id === currentTheme) || THEMES[0];
-  document.documentElement.style.setProperty("--accent", t.accent);
-  document.documentElement.style.setProperty("--accent-text", t.text);
-}
 function renderSoundToggle() { $("soundToggle").classList.toggle("on", soundEnabled); }
 function toggleSound() { soundEnabled = !soundEnabled; localStorage.setItem("tunduk_sound", soundEnabled ? "on" : "off"); renderSoundToggle(); }
 function renderWallpaperGrid() {
@@ -1665,7 +1571,7 @@ function buildPackRow(pack) {
   const row = document.createElement("div");
   row.className = "packRow";
   const icon = document.createElement("div"); icon.className = "packRowIcon";
-  if (pack.stickers && pack.stickers[0]) icon.innerHTML = `<img src="${pack.stickers[0].image_data}" alt="">`;
+  if (pack.stickers && pack.stickers[0]) icon.innerHTML = `<img src="${escapeAttr(pack.stickers[0].image_data)}" alt="">`;
   else icon.innerHTML = ICONS.sticker;
   const info = document.createElement("div"); info.className = "packRowInfo";
   const name = document.createElement("span"); name.textContent = pack.name;
@@ -1722,7 +1628,7 @@ async function renderStickerPackScreen() {
   grid.innerHTML = "";
   pack.stickers.forEach(st => {
     const tile = document.createElement("div"); tile.className = "stickerTile";
-    tile.innerHTML = `<img src="${st.image_data}" alt="">`;
+    tile.innerHTML = `<img src="${escapeAttr(st.image_data)}" alt="">`;
     const delBtn = document.createElement("button"); delBtn.className = "stickerTileDelete"; delBtn.innerHTML = ICONS.close;
     delBtn.onclick = () => deleteStickerFromPack(st.id);
     tile.appendChild(delBtn);
@@ -1796,7 +1702,7 @@ async function openStickerPicker() {
     const grid = document.createElement("div"); grid.className = "stickerPickerGrid";
     pack.stickers.forEach(st => {
       const btn = document.createElement("button"); btn.className = "stickerPickerItem";
-      btn.innerHTML = `<img src="${st.image_data}" alt="">`;
+      btn.innerHTML = `<img src="${escapeAttr(st.image_data)}" alt="">`;
       btn.onclick = () => sendStickerMessage(st.image_data);
       grid.appendChild(btn);
     });
@@ -1942,7 +1848,6 @@ if (typeof emailjs !== "undefined") {
 }
 
 injectIcons();
-applyTheme();
 applyWallpaper();
 requestNotifyPermission();
 
@@ -2028,7 +1933,7 @@ $("createChannelBtn").onclick     = createChannel;
 $("channelAvatarEditBtn").onclick = () => $("channelAvatarInput").click();
 $("channelAvatarInput").addEventListener("change", e => {
   const file = e.target.files[0]; if (!file) return;
-  resizeAndProcess(file, dataUrl => { channelAvatarData = dataUrl; $("channelAvatarPreview").innerHTML = `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:cover;">`; $("channelAvatarPreview").style.background = "none"; });
+  resizeAndProcess(file, dataUrl => { channelAvatarData = dataUrl; $("channelAvatarPreview").innerHTML = `<img src="${escapeAttr(dataUrl)}" style="width:100%;height:100%;object-fit:cover;">`; $("channelAvatarPreview").style.background = "none"; });
 });
 
 $("groupTypePublic").onclick    = () => setGroupType(true);
@@ -2038,7 +1943,7 @@ $("createGroupBtn").onclick     = createGroup;
 $("groupAvatarEditBtn").onclick = () => $("groupAvatarInput").click();
 $("groupAvatarInput").addEventListener("change", e => {
   const file = e.target.files[0]; if (!file) return;
-  resizeAndProcess(file, dataUrl => { groupAvatarData = dataUrl; $("groupAvatarPreview").innerHTML = `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:cover;">`; $("groupAvatarPreview").style.background = "none"; });
+  resizeAndProcess(file, dataUrl => { groupAvatarData = dataUrl; $("groupAvatarPreview").innerHTML = `<img src="${escapeAttr(dataUrl)}" style="width:100%;height:100%;object-fit:cover;">`; $("groupAvatarPreview").style.background = "none"; });
 });
 
 document.addEventListener("click", e => {
