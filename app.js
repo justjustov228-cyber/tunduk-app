@@ -7,6 +7,7 @@ const EMAILJS_PUBLIC_KEY  = "UMCdIt1zmhOihzHmr";
 // ==========================
 
 let token        = localStorage.getItem("tunduk_token")    || null;
+let refreshToken = localStorage.getItem("tunduk_refresh")  || null;
 let myUsername   = localStorage.getItem("tunduk_username") || null;
 let myUserId     = null;
 let myBio        = "";
@@ -21,6 +22,61 @@ let currentChatIsAdmin = false;
 let currentChatIsOwner = false;
 let messageCache      = {};
 let userProfileCache  = {};
+let chatPagination    = {}; // cacheKey -> { hasMore, oldestId, loading }
+const MESSAGES_PAGE_SIZE = 50;
+
+// ---- АВТО-РЕФРЕШ ТОКЕНА ----
+// Оборачиваем глобальный fetch один раз, поэтому все существующие "fetch(...)" по
+// коду ниже (их десятки) автоматически получают эту логику без переписывания каждого.
+// В этом API 401 отдаёт только протухший/невалидный access-токен (get_current_user) —
+// логин/регистрация на неверные данные отвечают 400, так что триггерить рефреш именно
+// на 401 безопасно и не задевает обычные формы.
+const _rawFetch = window.fetch.bind(window);
+let _refreshInFlight = null;
+
+async function refreshAccessToken() {
+  if (_refreshInFlight) return _refreshInFlight;
+  if (!refreshToken) return false;
+  _refreshInFlight = (async () => {
+    try {
+      const res = await _rawFetch(`${API_BASE}/auth/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      });
+      if (!res.ok) return false;
+      const data = await res.json();
+      token = data.access_token;
+      refreshToken = data.refresh_token;
+      localStorage.setItem("tunduk_token", token);
+      localStorage.setItem("tunduk_refresh", refreshToken);
+      return true;
+    } catch { return false; }
+  })();
+  const ok = await _refreshInFlight;
+  _refreshInFlight = null;
+  return ok;
+}
+
+window.fetch = async function (input, init) {
+  let res = await _rawFetch(input, init);
+  if (res.status === 401 && refreshToken) {
+    const ok = await refreshAccessToken();
+    if (ok) {
+      const retryInit = { ...(init || {}) };
+      if (retryInit.headers && (retryInit.headers.Authorization || retryInit.headers.authorization)) {
+        retryInit.headers = { ...retryInit.headers, Authorization: `Bearer ${token}` };
+      }
+      res = await _rawFetch(input, retryInit);
+    }
+    if (res.status === 401 && token) logout();
+  }
+  return res;
+};
+
+// подстраховка: обновляем access-токен заранее, чтобы он не успевал протухать
+// между запросами и WebSocket-реконнект тоже всегда шёл со свежим токеном
+setInterval(() => { if (token && refreshToken) refreshAccessToken(); }, 45 * 60 * 1000);
 
 let soundEnabled     = localStorage.getItem("tunduk_sound") !== "off";
 let currentWallpaper = localStorage.getItem("tunduk_wallpaper") || "none";
@@ -366,8 +422,9 @@ async function performLogin(email, username, password, errEl) {
     });
     const data = await res.json();
     if (!res.ok) { targetErrEl.textContent = data.detail || "Ошибка входа"; return; }
-    token = data.access_token; myUsername = username;
+    token = data.access_token; refreshToken = data.refresh_token; myUsername = username;
     localStorage.setItem("tunduk_token", token);
+    localStorage.setItem("tunduk_refresh", refreshToken);
     localStorage.setItem("tunduk_username", myUsername);
     showApp();
   } catch (e) {
@@ -377,8 +434,10 @@ async function performLogin(email, username, password, errEl) {
 
 function logout() {
   if (ws) { ws.close(); ws = null; }
-  token = null; myUsername = null; myBio = ""; myAvatar = ""; myFirstName = ""; myLastName = "";
+  if (refreshToken) { _rawFetch(`${API_BASE}/auth/logout`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ refresh_token: refreshToken }) }).catch(() => {}); }
+  token = null; refreshToken = null; myUsername = null; myBio = ""; myAvatar = ""; myFirstName = ""; myLastName = "";
   localStorage.removeItem("tunduk_token");
+  localStorage.removeItem("tunduk_refresh");
   localStorage.removeItem("tunduk_username");
   messageCache = {}; userProfileCache = {};
   pendingRegistrationEmail = null;
@@ -879,44 +938,53 @@ async function toggleAdmin(username, makeAdmin) {
 // ---- HISTORY ----
 async function loadUserHistory(username) {
   $("messages").innerHTML = `<div style="text-align:center;color:#666;font-size:13px;padding:20px;">Загрузка...</div>`;
+  const key = `user:${username}`;
   try {
-    const res = await fetch(`${API_BASE}/messages/${encodeURIComponent(username)}`, { headers: { Authorization: `Bearer ${token}` } });
-    if (res.status === 401) { logout(); return; }
-    const history = await res.json();
-    messageCache[`user:${username}`] = history.map(m => ({
-      content: m.content, timestamp: m.timestamp,
+    const res = await fetch(`${API_BASE}/messages/${encodeURIComponent(username)}?limit=${MESSAGES_PAGE_SIZE}`, { headers: { Authorization: `Bearer ${token}` } });
+    if (res.status === 401) { return; } // обработано внутри fetch-обёртки (рефреш или logout)
+    const data = await res.json();
+    const history = data.messages || [];
+    messageCache[key] = history.map(m => ({
+      id: m.id, content: m.content, timestamp: m.timestamp,
       mine: myUserId !== null && m.sender_id === myUserId, delivered: m.delivered,
       message_type: m.message_type, media_data: m.media_data, duration: m.duration,
     }));
-    renderMessages(`user:${username}`);
+    chatPagination[key] = { hasMore: !!data.has_more, oldestId: history.length ? history[0].id : null, loading: false };
+    renderMessages(key);
   } catch { $("messages").innerHTML = `<div style="text-align:center;color:#f44336;padding:20px;">Ошибка загрузки</div>`; }
 }
 
 async function loadChannelHistory(id) {
   $("messages").innerHTML = `<div style="text-align:center;color:#666;font-size:13px;padding:20px;">Загрузка...</div>`;
+  const key = `channel:${id}`;
   try {
-    const res = await fetch(`${API_BASE}/channels/${id}/messages`, { headers: { Authorization: `Bearer ${token}` } });
+    const res = await fetch(`${API_BASE}/channels/${id}/messages?limit=${MESSAGES_PAGE_SIZE}`, { headers: { Authorization: `Bearer ${token}` } });
     if (!res.ok) { $("messages").innerHTML = `<div style="text-align:center;color:#f44336;padding:20px;">Нет доступа</div>`; return; }
-    const history = await res.json();
-    messageCache[`channel:${id}`] = history.map(m => ({
-      content: m.content, timestamp: m.timestamp, mine: m.sender_username === myUsername, senderName: m.sender_username,
+    const data = await res.json();
+    const history = data.messages || [];
+    messageCache[key] = history.map(m => ({
+      id: m.id, content: m.content, timestamp: m.timestamp, mine: m.sender_username === myUsername, senderName: m.sender_username,
       message_type: m.message_type, media_data: m.media_data, duration: m.duration,
     }));
-    renderMessages(`channel:${id}`);
+    chatPagination[key] = { hasMore: !!data.has_more, oldestId: history.length ? history[0].id : null, loading: false };
+    renderMessages(key);
   } catch { $("messages").innerHTML = `<div style="text-align:center;color:#f44336;padding:20px;">Ошибка</div>`; }
 }
 
 async function loadGroupHistory(id) {
   $("messages").innerHTML = `<div style="text-align:center;color:#666;font-size:13px;padding:20px;">Загрузка...</div>`;
+  const key = `group:${id}`;
   try {
-    const res = await fetch(`${API_BASE}/groups/${id}/messages`, { headers: { Authorization: `Bearer ${token}` } });
+    const res = await fetch(`${API_BASE}/groups/${id}/messages?limit=${MESSAGES_PAGE_SIZE}`, { headers: { Authorization: `Bearer ${token}` } });
     if (!res.ok) { $("messages").innerHTML = `<div style="text-align:center;color:#f44336;padding:20px;">Нет доступа</div>`; return; }
-    const history = await res.json();
-    messageCache[`group:${id}`] = history.map(m => ({
-      content: m.content, timestamp: m.timestamp, mine: m.sender_username === myUsername, senderName: m.sender_username,
+    const data = await res.json();
+    const history = data.messages || [];
+    messageCache[key] = history.map(m => ({
+      id: m.id, content: m.content, timestamp: m.timestamp, mine: m.sender_username === myUsername, senderName: m.sender_username,
       message_type: m.message_type, media_data: m.media_data, duration: m.duration,
     }));
-    renderMessages(`group:${id}`);
+    chatPagination[key] = { hasMore: !!data.has_more, oldestId: history.length ? history[0].id : null, loading: false };
+    renderMessages(key);
   } catch { $("messages").innerHTML = `<div style="text-align:center;color:#f44336;padding:20px;">Ошибка</div>`; }
 }
 
@@ -925,6 +993,80 @@ function renderMessages(cacheKey) {
   container.innerHTML = "";
   (messageCache[cacheKey] || []).forEach(m => addMessageBubble(m));
   container.scrollTop = container.scrollHeight;
+}
+
+function currentCacheKey() {
+  if (currentChatType === "user" && currentChatWith) return `user:${currentChatWith}`;
+  if (currentChatType === "channel" && currentChatId) return `channel:${currentChatId}`;
+  if (currentChatType === "group" && currentChatId) return `group:${currentChatId}`;
+  return null;
+}
+
+async function fetchOlderPage(cacheKey, beforeId) {
+  const limit = MESSAGES_PAGE_SIZE;
+  if (cacheKey.startsWith("user:")) {
+    const username = cacheKey.slice(5);
+    const res = await fetch(`${API_BASE}/messages/${encodeURIComponent(username)}?before_id=${beforeId}&limit=${limit}`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return { has_more: !!data.has_more, messages: (data.messages || []).map(m => ({
+      id: m.id, content: m.content, timestamp: m.timestamp,
+      mine: myUserId !== null && m.sender_id === myUserId, delivered: m.delivered,
+      message_type: m.message_type, media_data: m.media_data, duration: m.duration,
+    })) };
+  }
+  const [kind, id] = [cacheKey.split(":")[0], cacheKey.split(":")[1]];
+  const urlBase = kind === "channel" ? `${API_BASE}/channels/${id}/messages` : `${API_BASE}/groups/${id}/messages`;
+  const res = await fetch(`${urlBase}?before_id=${beforeId}&limit=${limit}`, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) return null;
+  const data = await res.json();
+  return { has_more: !!data.has_more, messages: (data.messages || []).map(m => ({
+    id: m.id, content: m.content, timestamp: m.timestamp, mine: m.sender_username === myUsername, senderName: m.sender_username,
+    message_type: m.message_type, media_data: m.media_data, duration: m.duration,
+  })) };
+}
+
+async function loadOlderMessagesIfNeeded() {
+  const key = currentCacheKey();
+  if (!key) return;
+  const state = chatPagination[key];
+  if (!state || state.loading || !state.hasMore || state.oldestId == null) return;
+
+  const container = $("messages");
+  if (container.scrollTop > 80) return; // подгружаем только когда реально близко к верху
+
+  state.loading = true;
+  let spinner = document.createElement("div");
+  spinner.id = "olderMsgsSpinner";
+  spinner.style.cssText = "text-align:center;color:#6b6f7a;font-size:12px;padding:8px;";
+  spinner.textContent = "Загрузка...";
+  container.insertBefore(spinner, container.firstChild);
+
+  const prevScrollHeight = container.scrollHeight;
+  const prevScrollTop = container.scrollTop;
+
+  try {
+    const page = await fetchOlderPage(key, state.oldestId);
+    spinner.remove();
+    if (page && page.messages.length > 0) {
+      messageCache[key] = [...page.messages, ...(messageCache[key] || [])];
+      state.oldestId = page.messages[0].id;
+      state.hasMore = page.has_more;
+
+      const fragment = document.createDocumentFragment();
+      page.messages.forEach(m => fragment.appendChild(buildMessageBubbleEl(m)));
+      container.insertBefore(fragment, container.firstChild);
+
+      // компенсируем прыжок скролла из-за вставленного контента сверху
+      container.scrollTop = prevScrollTop + (container.scrollHeight - prevScrollHeight);
+    } else if (page) {
+      state.hasMore = page.has_more;
+    }
+  } catch {
+    spinner.remove();
+  } finally {
+    state.loading = false;
+  }
 }
 
 function formatDuration(sec) {
@@ -977,8 +1119,7 @@ function setupVoiceBubble(div, src, totalDuration) {
   };
 }
 
-function addMessageBubble(m) {
-  const container = $("messages");
+function buildMessageBubbleEl(m) {
   const div = document.createElement("div");
   const mine = m.mine;
   const type = m.message_type || "text";
@@ -1006,8 +1147,12 @@ function addMessageBubble(m) {
     div.className = "msg " + (mine ? "mine" : "theirs");
     div.innerHTML = `${nameHtml}${escapeHtml(m.content)}<div class="meta">${time}${tick}</div>`;
   }
+  return div;
+}
 
-  container.appendChild(div);
+function addMessageBubble(m) {
+  const container = $("messages");
+  container.appendChild(buildMessageBubbleEl(m));
   container.scrollTop = container.scrollHeight;
 }
 
@@ -1041,7 +1186,7 @@ async function sendChatPayload(payload) {
       if (!res.ok) { alert(msg.detail || "Ошибка отправки"); return false; }
       const key = `channel:${currentChatId}`;
       if (!messageCache[key]) messageCache[key] = [];
-      const entry = { content: msg.content, timestamp: msg.timestamp, mine: true, senderName: myUsername, message_type: msg.message_type, media_data: msg.media_data, duration: msg.duration };
+      const entry = { id: msg.id, content: msg.content, timestamp: msg.timestamp, mine: true, senderName: myUsername, message_type: msg.message_type, media_data: msg.media_data, duration: msg.duration };
       messageCache[key].push(entry);
       addMessageBubble(entry);
       return true;
@@ -1054,7 +1199,7 @@ async function sendChatPayload(payload) {
       if (!res.ok) { alert(msg.detail || "Ошибка отправки"); return false; }
       const key = `group:${currentChatId}`;
       if (!messageCache[key]) messageCache[key] = [];
-      const entry = { content: msg.content, timestamp: msg.timestamp, mine: true, senderName: myUsername, message_type: msg.message_type, media_data: msg.media_data, duration: msg.duration };
+      const entry = { id: msg.id, content: msg.content, timestamp: msg.timestamp, mine: true, senderName: myUsername, message_type: msg.message_type, media_data: msg.media_data, duration: msg.duration };
       messageCache[key].push(entry);
       addMessageBubble(entry);
       return true;
@@ -1077,7 +1222,7 @@ function onChatImageChosen(e) {
   resizeChatImage(file, dataUrl => sendChatPayload({ content: "", message_type: "image", media_data: dataUrl }));
 }
 
-function resizeChatImage(file, callback, maxSize = 1280) {
+function resizeChatImage(file, callback, maxSize = 1200) {
   const reader = new FileReader();
   reader.onload = e => {
     const img = new Image();
@@ -1224,7 +1369,7 @@ function connectWebSocket() {
     if (data.type === "message") {
       const other = data.sender; const key = `user:${other}`;
       if (!messageCache[key]) messageCache[key] = [];
-      const entry = { content: data.content, mine: false, timestamp: data.timestamp, message_type: data.message_type, media_data: data.media_data, duration: data.duration };
+      const entry = { id: data.id, content: data.content, mine: false, timestamp: data.timestamp, message_type: data.message_type, media_data: data.media_data, duration: data.duration };
       messageCache[key].push(entry);
 
       const wasNewChat = !getRecentChats().includes(key);
@@ -1243,7 +1388,7 @@ function connectWebSocket() {
     if (data.type === "ack") {
       const other = data.receiver; const key = `user:${other}`;
       if (!messageCache[key]) messageCache[key] = [];
-      const entry = { content: data.content, mine: true, timestamp: data.timestamp, delivered: data.delivered, message_type: data.message_type, media_data: data.media_data, duration: data.duration };
+      const entry = { id: data.id, content: data.content, mine: true, timestamp: data.timestamp, delivered: data.delivered, message_type: data.message_type, media_data: data.media_data, duration: data.duration };
       messageCache[key].push(entry);
       if (currentChatType === "user" && currentChatWith === other) addMessageBubble(entry);
     }
@@ -1876,6 +2021,12 @@ $("backBtn").onclick     = closeChat;
 $("sendBtn").onclick     = sendMessage;
 $("msgInput").addEventListener("keypress", e => { if (e.key === "Enter") sendMessage(); });
 $("msgInput").addEventListener("input", updateSendControls);
+let _scrollLoadThrottle = null;
+$("messages").addEventListener("scroll", () => {
+  if (_scrollLoadThrottle) return;
+  _scrollLoadThrottle = setTimeout(() => { _scrollLoadThrottle = null; }, 150);
+  loadOlderMessagesIfNeeded();
+});
 $("attachBtn").onclick   = pickChatImage;
 $("chatImageInput").addEventListener("change", onChatImageChosen);
 $("micBtn").onclick            = startVoiceRecording;
